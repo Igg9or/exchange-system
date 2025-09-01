@@ -1,0 +1,56 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.custom-table th, .custom-table td {
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.custom-table thead {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+.custom-table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 1rem;
+}
+
+.page-btn {
+  padding: 0.5rem 0.75rem;
+  background: #2563eb;
+  color: white;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: 0.2s;
+}
+
+.page-btn:hover {
+  background: #1d4ed8;
+}
+
+.page-current {
+  font-weight: bold;
+}

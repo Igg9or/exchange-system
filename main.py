@@ -1,184 +1,50 @@
+from flask import Flask, render_template, redirect, url_for, request
+from db import SessionLocal, init_db
+from models import Service, Asset, Balance, Shift, Order, User, BalanceHistory
 from datetime import datetime
-from db import engine, SessionLocal, Base
-from models import Service, Asset, Balance, Shift, Order, BalanceHistory, User
+from sqlalchemy.orm import Session
 from collections import defaultdict
+from flask import Flask, render_template, redirect, url_for, request, session, flash
+from werkzeug.security import check_password_hash, generate_password_hash
 
-# --- Утилиты ---
-def init_db():
-    Base.metadata.create_all(engine)
-
-
-def get_or_create_asset(db, symbol: str, name: str):
-    asset = db.query(Asset).filter(Asset.symbol == symbol).first()
-    if not asset:
-        asset = Asset(symbol=symbol, name=name)
-        db.add(asset)
-        db.commit()
-        db.refresh(asset)
-        print(f"Добавлен актив {symbol}")
-    return asset
+app = Flask(__name__)
+app.secret_key = "super_secret_key_123"
+init_db()
 
 
-def get_or_create_service(db, name: str):
+# ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+
+def get_or_create_service(db: Session, name: str):
     service = db.query(Service).filter(Service.name == name).first()
     if not service:
         service = Service(name=name)
         db.add(service)
         db.commit()
         db.refresh(service)
-        print(f"Добавлен сервис {name}")
     return service
 
 
-def get_or_create_user(db, login: str, service_id: int, role="operator"):
+def get_or_create_asset(db: Session, symbol: str, name: str):
+    asset = db.query(Asset).filter(Asset.symbol == symbol).first()
+    if not asset:
+        asset = Asset(symbol=symbol, name=name)
+        db.add(asset)
+        db.commit()
+        db.refresh(asset)
+    return asset
+
+
+def get_or_create_user(db: Session, login: str, service_id: int, role="operator"):
     user = db.query(User).filter(User.login == login).first()
     if not user:
         user = User(login=login, password_hash="123", role=role, service_id=service_id)
         db.add(user)
         db.commit()
         db.refresh(user)
-        print(f"Добавлен пользователь {login}")
     return user
 
 
-# --- Смены ---
-def start_shift(db, service_id: int):
-    existing = db.query(Shift).filter(
-        Shift.service_id == service_id,
-        Shift.end_time == None
-    ).first()
-    if existing:
-        print(f"В сервисе {service_id} уже есть открытая смена {existing.id}")
-        return existing
-
-    shift = Shift(service_id=service_id, start_time=datetime.utcnow())
-    db.add(shift)
-    db.commit()
-    db.refresh(shift)
-    print(f"Смена {shift.id} начата в сервисе {service_id}")
-    return shift
-
-
-def end_shift(db, service_id: int):
-    shift = db.query(Shift).filter(
-        Shift.service_id == service_id,
-        Shift.end_time == None
-    ).first()
-    if not shift:
-        print("Открытая смена не найдена")
-        return
-    shift.end_time = datetime.utcnow()
-    db.commit()
-    print(f"Смена {shift.id} завершена в сервисе {service_id}")
-    return shift
-
-
-# --- Заявки ---
-def create_order(db, service_id: int, user_id: int,
-                 received_asset_id: int, received_amount: float,
-                 given_asset_id: int, given_amount: float,
-                 comment: str = "", is_manual=True, rates: dict = None):
-
-    shift = db.query(Shift).filter(
-        Shift.service_id == service_id,
-        Shift.end_time == None
-    ).first()
-    if not shift:
-        raise Exception("Нет активной смены для сервиса!")
-
-    order = Order(
-        service_id=service_id,
-        user_id=user_id,
-        shift_id=shift.id,
-        type="order",
-        is_manual=is_manual,
-        received_asset_id=received_asset_id,
-        received_amount=received_amount,
-        given_asset_id=given_asset_id,
-        given_amount=given_amount,
-        comment=comment,
-        rate_at_execution=rates or {},  # фиксируем курс
-        profit_percent=calc_profit(received_amount, given_amount)
-    )
-    db.add(order)
-
-    update_balance(db, service_id, received_asset_id, received_amount)
-    update_balance(db, service_id, given_asset_id, -given_amount)
-
-    db.commit()
-    db.refresh(order)
-    print(f"Заявка {order.id} создана оператором {user_id} в сервисе {service_id}")
-    return order
-
-
-# --- Админские операции ---
-def admin_change_balance(db, service_id: int, asset_id: int, amount: float, action_type: str, comment: str = ""):
-    if action_type == "withdraw":
-        change = -abs(amount)
-    elif action_type == "deposit":
-        change = abs(amount)
-    else:
-        raise ValueError("action_type должен быть 'deposit' или 'withdraw'")
-
-    order = Order(
-        service_id=service_id,
-        user_id=None,
-        shift_id=None,
-        type="admin_action",
-        is_manual=True,
-        received_asset_id=None,
-        received_amount=0.0,
-        given_asset_id=asset_id if change < 0 else None,
-        given_amount=abs(change) if change < 0 else 0.0,
-        comment=comment,
-        rate_at_execution={},
-        profit_percent=0
-    )
-    db.add(order)
-
-    update_balance(db, service_id, asset_id, change)
-
-    db.commit()
-    db.refresh(order)
-    print(f"Админская операция: {action_type} {amount} {asset_id} в сервис {service_id}")
-    return order
-
-
-# --- Переводы между сервисами ---
-def internal_transfer(db, from_service_id: int, to_service_id: int, asset_id: int, amount: float, user_id: int, comment: str = ""):
-    if amount <= 0:
-        raise ValueError("Сумма перевода должна быть положительной")
-
-    # если комментарий пустой → автогенерация
-    comment = comment or f"Перевод {amount} {asset_id} из сервиса {from_service_id} → {to_service_id}"
-
-    order = Order(
-        service_id=from_service_id,
-        user_id=user_id,
-        shift_id=None,
-        type="internal_transfer",
-        is_manual=True,
-        received_asset_id=None,
-        received_amount=0.0,
-        given_asset_id=asset_id,
-        given_amount=amount,
-        comment=comment,
-        rate_at_execution={},
-        profit_percent=0
-    )
-    db.add(order)
-
-    update_balance(db, from_service_id, asset_id, -amount)
-    update_balance(db, to_service_id, asset_id, amount)
-
-    db.commit()
-    db.refresh(order)
-    print(f"Перевод: {amount} {asset_id} из сервиса {from_service_id} → {to_service_id}")
-    return order
-
-
-# --- Балансы ---
-def update_balance(db, service_id: int, asset_id: int, change: float):
+def update_balance(db: Session, service_id: int, asset_id: int, change: float):
     balance = db.query(Balance).filter(
         Balance.service_id == service_id,
         Balance.asset_id == asset_id
@@ -210,105 +76,315 @@ def calc_profit(received: float, given: float) -> float:
     return round(((received - given) / given) * 100, 2)
 
 
-def get_shift_report(db, service_id: int):
+# ===== СМЕНЫ =====
+
+def start_shift(db: Session, service_id: int):
+    existing = db.query(Shift).filter(
+        Shift.service_id == service_id,
+        Shift.end_time == None
+    ).first()
+    if existing:
+        return existing
+    shift = Shift(service_id=service_id, start_time=datetime.utcnow())
+    db.add(shift)
+    db.commit()
+    db.refresh(shift)
+    return shift
+
+
+def end_shift(db: Session, service_id: int):
+    shift = db.query(Shift).filter(
+        Shift.service_id == service_id,
+        Shift.end_time == None
+    ).first()
+    if not shift:
+        return None
+    shift.end_time = datetime.utcnow()
+    db.commit()
+    return shift
+
+
+# ===== ЗАЯВКИ =====
+
+def create_order(db: Session, service_id: int, user_id: int,
+                 received_asset_id: int, received_amount: float,
+                 given_asset_id: int, given_amount: float,
+                 comment: str = "", is_manual=True, rates: dict = None):
+
+    shift = db.query(Shift).filter(
+        Shift.service_id == service_id,
+        Shift.end_time == None
+    ).first()
+    if not shift:
+        raise Exception("Нет активной смены для сервиса!")
+
+    order = Order(
+        service_id=service_id,
+        user_id=user_id,
+        shift_id=shift.id,
+        type="order",
+        is_manual=is_manual,
+        received_asset_id=received_asset_id,
+        received_amount=received_amount,
+        given_asset_id=given_asset_id,
+        given_amount=given_amount,
+        comment=comment,
+        rate_at_execution=rates or {},
+        profit_percent=calc_profit(received_amount, given_amount)
+    )
+    db.add(order)
+
+    update_balance(db, service_id, received_asset_id, received_amount)
+    update_balance(db, service_id, given_asset_id, -given_amount)
+
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+# ===== АДМИНСКИЕ ОПЕРАЦИИ =====
+
+def admin_change_balance(db: Session, service_id: int, asset_id: int, amount: float, action_type: str, comment: str = ""):
+    if action_type == "withdraw":
+        change = -abs(amount)
+    elif action_type == "deposit":
+        change = abs(amount)
+    else:
+        raise ValueError("action_type должен быть 'deposit' или 'withdraw'")
+
+    order = Order(
+        service_id=service_id,
+        user_id=None,
+        shift_id=None,
+        type="admin_action",
+        is_manual=True,
+        received_asset_id=None,
+        received_amount=0.0,
+        given_asset_id=asset_id if change < 0 else None,
+        given_amount=abs(change) if change < 0 else 0.0,
+        comment=comment,
+        rate_at_execution={},
+        profit_percent=0
+    )
+    db.add(order)
+
+    update_balance(db, service_id, asset_id, change)
+
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+# ===== ВНУТРЕННИЕ ПЕРЕВОДЫ =====
+
+def internal_transfer(db: Session, from_service_id: int, to_service_id: int, asset_id: int, amount: float, user_id: int, comment: str = ""):
+    if amount <= 0:
+        raise ValueError("Сумма перевода должна быть положительной")
+
+    comment = comment or f"Перевод {amount} {asset_id} из сервиса {from_service_id} → {to_service_id}"
+
+    order = Order(
+        service_id=from_service_id,
+        user_id=user_id,
+        shift_id=None,
+        type="internal_transfer",
+        is_manual=True,
+        received_asset_id=None,
+        received_amount=0.0,
+        given_asset_id=asset_id,
+        given_amount=amount,
+        comment=comment,
+        rate_at_execution={},
+        profit_percent=0
+    )
+    db.add(order)
+
+    update_balance(db, from_service_id, asset_id, -amount)
+    update_balance(db, to_service_id, asset_id, amount)
+
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+# ===== ОТЧЁТ =====
+
+def get_shift_report(db: Session, service_id: int):
     shift = db.query(Shift).filter(
         Shift.service_id == service_id
     ).order_by(Shift.start_time.desc()).first()
 
     if not shift:
-        print("Смена не найдена")
-        return
-
-    print(f"\n--- Отчёт по смене {shift.id} (сервис {service_id}) ---")
-    print(f"Начало: {shift.start_time}, Конец: {shift.end_time or 'ещё открыта'}")
+        return {"error": "Смена не найдена"}
 
     orders = db.query(Order).filter(Order.shift_id == shift.id).all()
-    if not orders:
-        print("Заявок в смене нет")
-        return
 
-    from collections import defaultdict
     totals = defaultdict(float)
-    total_profit_percent = 0
     total_profit_rub = 0
+    details = []
 
     for o in orders:
         recv_asset = db.query(Asset).get(o.received_asset_id) if o.received_asset_id else None
         give_asset = db.query(Asset).get(o.given_asset_id) if o.given_asset_id else None
         user = db.query(User).get(o.user_id) if o.user_id else None
 
-        print(f"\nЗаявка {o.id} | Оператор: {user.login if user else 'система'} | Тип: {o.type}")
-        print(f"Получили: {o.received_amount} {recv_asset.symbol if recv_asset else '-'}")
-        print(f"Отдали: {o.given_amount} {give_asset.symbol if give_asset else '-'}")
-        print(f"Комментарий: {o.comment}")
-        print(f"Прибыль %: {o.profit_percent}")
-
-        if o.rate_at_execution:
-            print(f"Курсы при создании: {o.rate_at_execution}")
-            if "RUB" in o.rate_at_execution:
-                recv_value = o.received_amount * o.rate_at_execution.get("RUB", 0)
-                give_value = o.given_amount * o.rate_at_execution.get("RUB", 0)
-                total_profit_rub += recv_value - give_value
+        details.append({
+            "id": o.id,
+            "user": user.login if user else "система",
+            "type": o.type,
+            "recv": f"{o.received_amount} {recv_asset.symbol if recv_asset else '-'}",
+            "give": f"{o.given_amount} {give_asset.symbol if give_asset else '-'}",
+            "comment": o.comment,
+            "profit_percent": o.profit_percent
+        })
 
         if recv_asset:
             totals[recv_asset.symbol] += o.received_amount
         if give_asset:
             totals[give_asset.symbol] -= o.given_amount
 
-        total_profit_percent += o.profit_percent
+    return {
+        "shift_id": shift.id,
+        "start": str(shift.start_time),
+        "end": str(shift.end_time) if shift.end_time else None,
+        "orders": details,
+        "totals": dict(totals),
+        "total_profit_rub": total_profit_rub
+    }
 
-    print("\n--- Итог по активам ---")
-    for asset, value in totals.items():
-        print(f"{asset}: {value}")
 
-    print(f"\nИтоговая прибыль (сумма %): {round(total_profit_percent, 2)}%")
-    print(f"Итоговая прибыль в рублях (если указан курс): {round(total_profit_rub, 2)} RUB")
+# ===== FLASK ROUTES =====
 
+@app.route("/")
+def index():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
 
-# --- Тестовый сценарий ---
-if __name__ == "__main__":
-    init_db()
     db = SessionLocal()
+    user = db.query(User).get(session["user_id"])
 
-    # 1. Гарантируем, что сервисы есть
-    service1 = get_or_create_service(db, "Сервис 1")
-    service2 = get_or_create_service(db, "Сервис 2")
+    # Пагинация
+    page = int(request.args.get("page", 1))
+    per_page = 10
+    offset = (page - 1) * per_page
 
-    # 2. Гарантируем, что активы есть
-    btc = get_or_create_asset(db, "BTC", "Bitcoin")
-    eth = get_or_create_asset(db, "ETH", "Ethereum")
-    usdt = get_or_create_asset(db, "USDT", "Tether")
-    rub = get_or_create_asset(db, "RUB", "Российский рубль")
-    usd = get_or_create_asset(db, "USD", "Доллар США")
+    balances, orders, assets = [], [], []
 
-    # 3. Создаём пользователей
-    user1 = get_or_create_user(db, "operator1", service1.id)
-    user2 = get_or_create_user(db, "operator2", service2.id)
+    if user.role == "admin":
+        # Админ видит первый сервис (можно потом расширить на выбор)
+        service = db.query(Service).first()
+        services = db.query(Service).all()
+    else:
+        # Оператор видит только свой сервис
+        service = db.query(Service).get(user.service_id)
+        services = [service]
 
-    # 4. Начинаем смену для сервиса 1
-    shift = start_shift(db, service1.id)
+    if service:
+        balances = (
+            db.query(Balance, Asset)
+            .join(Asset, Balance.asset_id == Asset.id)
+            .filter(Balance.service_id == service.id)
+            .all()
+        )
+        orders = (
+            db.query(Order)
+            .filter(Order.service_id == service.id)
+            .order_by(Order.id.desc())
+            .offset(offset)
+            .limit(per_page + 1)
+            .all()
+        )
+        assets = db.query(Asset).all()
 
-    # 5. Создаём заявку
-    create_order(db, service1.id, user1.id,
-             received_asset_id=btc.id, received_amount=1.0,
-             given_asset_id=rub.id, given_amount=100000,
-             comment="Тестовая заявка",
-             rates={"RUB": 5500000})  # курс BTC в рублях
+    db.close()
+    has_next = len(orders) > per_page
+    orders = orders[:per_page]
 
-    # 6. Админская операция
-    admin_change_balance(db, service1.id, rub.id, 500000, action_type="deposit", comment="Пополнение кассы")
+    return render_template(
+        "index.html",
+        user=user,
+        service=service,
+        services=services,   # список сервисов (админу пригодится)
+        balances=balances,
+        orders=orders,
+        page=page,
+        has_next=has_next,
+        assets=assets
+    )
 
-    # 7. Перевод между сервисами
-    internal_transfer(db, service1.id, service2.id, btc.id, 0.5, user1.id, comment="Перегон BTC")
+@app.route("/shift/start/<int:service_id>")
+def shift_start(service_id):
+    db = SessionLocal()
+    start_shift(db, service_id)
+    db.close()
+    return redirect(url_for("index"))
 
-    # 8. Закрываем смену
-    end_shift(db, service1.id)
 
-    # 9. Отчёт по смене
-    get_shift_report(db, service1.id)
+@app.route("/shift/end/<int:service_id>")
+def shift_end(service_id):
+    db = SessionLocal()
+    end_shift(db, service_id)
+    db.close()
+    return redirect(url_for("index"))
 
-    # 9. Проверяем балансы
-    balances = db.query(Balance).all()
-    for b in balances:
-        asset = db.query(Asset).get(b.asset_id)
-        print(f"Service {b.service_id}, Asset {asset.symbol}, Amount {b.amount}")
+
+@app.route("/shift/report/<int:service_id>")
+def shift_report(service_id):
+    db = SessionLocal()
+    report = get_shift_report(db, service_id)
+    db.close()
+    return report
+
+@app.route("/order/add", methods=["POST"])
+def add_order():
+    db = SessionLocal()
+    service_id = int(request.form["service_id"])
+    user_id = int(request.form["user_id"])
+    received_asset_id = int(request.form["received_asset_id"])
+    received_amount = float(request.form["received_amount"])
+    given_asset_id = int(request.form["given_asset_id"])
+    given_amount = float(request.form["given_amount"])
+    comment = request.form.get("comment", "")
+
+    # создаём заявку
+    create_order(
+        db,
+        service_id=service_id,
+        user_id=user_id,
+        received_asset_id=received_asset_id,
+        received_amount=received_amount,
+        given_asset_id=given_asset_id,
+        given_amount=given_amount,
+        comment=comment,
+    )
+
+    db.close()
+    return redirect(url_for("index"))
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        login = request.form["login"]
+        password = request.form["password"]
+
+        db = SessionLocal()
+        user = db.query(User).filter(User.login == login).first()
+        db.close()
+
+        if user and (user.password_hash == password or check_password_hash(user.password_hash, password)):
+            session["user_id"] = user.id
+            session["role"] = user.role
+            return redirect(url_for("index"))
+        else:
+            flash("Неверный логин или пароль", "error")
+
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+if __name__ == "__main__":
+    app.run(debug=True)

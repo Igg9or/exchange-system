@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Crypto Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-900">
+  <div class="container mx-auto p-6">
+
+    <h1 class="text-2xl font-bold mb-6">
+      Сервис: {{ service.name if service else "Нет сервиса" }}
+    </h1>
+
+    <!-- Балансы -->
+    <h2 class="section-title">Балансы</h2>
+    <table class="custom-table mb-6">
+      <thead>
+        <tr><th>Актив</th><th>Сумма</th></tr>
+      </thead>
+      <tbody>
+        {% for balance, asset in balances %}
+        <tr><td>{{ asset.symbol }}</td><td>{{ balance.amount }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Заявки -->
+    <h2 class="section-title">Заявки</h2>
+    <table class="custom-table">
+      <thead>
+        <tr><th>ID</th><th>Тип</th><th>Получили</th><th>Отдали</th><th>Комментарий</th></tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td>{{ o.id }}</td>
+          <td>{{ o.type }}</td>
+          <td>{{ o.received_amount }}</td>
+          <td>{{ o.given_amount }}</td>
+          <td>{{ o.comment }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    
+    <!-- Пагинация -->
+    <div class="pagination">
+      {% if page > 1 %}
+        <a href="{{ url_for('index', page=page-1) }}" class="page-btn">⬅ Назад</a>
+      {% endif %}
+      <span class="page-current">Стр. {{ page }}</span>
+      {% if has_next %}
+        <a href="{{ url_for('index', page=page+1) }}" class="page-btn">Вперёд ➡</a>
+      {% endif %}
+    </div>
+
+    <!-- СОЗДАНИЕ ЗАЯВКИ -->
+<h2 class="section-title mt-8">Создать заявку</h2>
+<form action="{{ url_for('add_order') }}" method="post" class="bg-white p-4 rounded shadow space-y-3">
+  <input type="hidden" name="service_id" value="{{ service.id }}">
+  <input type="hidden" name="user_id" value="1"> <!-- пока жёстко ставим operator1 -->
+
+  <div>
+  <label class="block text-sm font-medium">Получили</label>
+  <select name="received_asset_id" class="border px-2 py-1 rounded">
+    {% for asset in assets %}
+      <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+    {% endfor %}
+  </select>
+  <input type="text" name="received_amount" placeholder="Сумма" class="border px-2 py-1 rounded">
+</div>
+
+<div>
+  <label class="block text-sm font-medium">Отдали</label>
+  <select name="given_asset_id" class="border px-2 py-1 rounded">
+    {% for asset in assets %}
+      <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+    {% endfor %}
+  </select>
+  <input type="text" name="given_amount" placeholder="Сумма" class="border px-2 py-1 rounded">
+</div>
+
+  <div>
+    <label class="block text-sm font-medium">Комментарий</label>
+    <input type="text" name="comment" placeholder="Комментарий" class="border w-full px-2 py-1 rounded">
+  </div>
+
+  <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Добавить</button>
+</form>
+
+
+  </div>
+</body>
+</html>
