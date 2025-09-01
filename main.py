@@ -263,22 +263,24 @@ def index():
     db = SessionLocal()
     user = db.query(User).get(session["user_id"])
 
-    # Пагинация
+    # сервис по умолчанию
+    service_id = request.args.get("service_id", type=int)
+    if user.role == "admin":
+        if service_id:
+            service = db.query(Service).get(service_id)
+        else:
+            service = db.query(Service).first()
+        services = db.query(Service).all()
+    else:
+        service = db.query(Service).get(user.service_id)
+        services = [service]
+
+    # пагинация
     page = int(request.args.get("page", 1))
     per_page = 10
     offset = (page - 1) * per_page
 
     balances, orders, assets = [], [], []
-
-    if user.role == "admin":
-        # Админ видит первый сервис (можно потом расширить на выбор)
-        service = db.query(Service).first()
-        services = db.query(Service).all()
-    else:
-        # Оператор видит только свой сервис
-        service = db.query(Service).get(user.service_id)
-        services = [service]
-
     if service:
         balances = (
             db.query(Balance, Asset)
@@ -304,12 +306,12 @@ def index():
         "index.html",
         user=user,
         service=service,
-        services=services,   # список сервисов (админу пригодится)
+        services=services,
         balances=balances,
         orders=orders,
         page=page,
         has_next=has_next,
-        assets=assets
+        assets=assets,
     )
 
 @app.route("/shift/start/<int:service_id>")
@@ -384,6 +386,54 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/shift/report_html")
+def shift_report_html():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    db = SessionLocal()
+    user = db.query(User).get(session["user_id"])
+
+    # берём последнюю смену этого пользователя (или сервиса)
+    shift = (
+        db.query(Shift)
+        .filter(Shift.service_id == user.service_id)
+        .order_by(Shift.start_time.desc())
+        .first()
+    )
+
+    if not shift:
+        db.close()
+        return render_template("shift_report.html", shift=None, orders=[], balances=[])
+
+    # заявки в этой смене
+    orders = (
+        db.query(Order)
+        .filter(Order.shift_id == shift.id)
+        .order_by(Order.id.asc())
+        .all()
+    )
+
+    # балансы на конец смены
+    balances = (
+        db.query(Balance, Asset)
+        .join(Asset, Balance.asset_id == Asset.id)
+        .filter(Balance.service_id == shift.service_id)
+        .all()
+    )
+
+    db.close()
+
+    return render_template(
+        "shift_report.html",
+        shift=shift,
+        orders=orders,
+        balances=balances
+    )
+
+
 
 
 if __name__ == "__main__":
