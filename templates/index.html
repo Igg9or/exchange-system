@@ -36,6 +36,97 @@
       Сервис: {{ service.name if service else "Нет сервиса" }}
     </h1>
 
+
+    {% if user.role == "admin" %}
+<h2 class="section-title mt-8">Админская операция</h2>
+<form action="{{ url_for('admin_action') }}" method="post" class="bg-white p-4 rounded shadow space-y-3">
+  <div>
+    <label class="block text-sm font-medium">Сервис</label>
+    <select name="service_id" class="border px-2 py-1 rounded">
+      {% for s in services %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium">Актив</label>
+    <select name="asset_id" class="border px-2 py-1 rounded">
+      {% for asset in assets %}
+        <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium">Операция</label>
+    <select name="action_type" class="border px-2 py-1 rounded">
+      <option value="deposit">Пополнение</option>
+      <option value="withdraw">Вывод</option>
+    </select>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium">Сумма</label>
+    <input type="number" step="0.0001" name="amount" class="border px-2 py-1 rounded" required>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium">Комментарий</label>
+    <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+  </div>
+
+  <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded">Выполнить</button>
+</form>
+{% endif %}
+
+<h2 class="section-title mt-8">Перевод между сервисами</h2>
+<form action="{{ url_for('internal_transfer') }}" method="post" class="bg-white p-4 rounded shadow space-y-3">
+  <div>
+  <label class="block text-sm font-medium">Откуда (сервис)</label>
+  <select name="from_service_id" class="border px-2 py-1 rounded" {% if user.role == 'operator' %} disabled {% endif %}>
+    {% for s in services %}
+      <option value="{{ s.id }}" {% if user.role == 'operator' and s.id == service.id %} selected {% endif %}>
+        {{ s.name }}
+      </option>
+    {% endfor %}
+  </select>
+  {% if user.role == 'operator' %}
+    <input type="hidden" name="from_service_id" value="{{ service.id }}">
+  {% endif %}
+</div>
+
+  <div>
+  <label class="block text-sm font-medium">Куда (сервис)</label>
+  <select name="to_service_id" class="border px-2 py-1 rounded">
+    {% for s in services %}
+      <option value="{{ s.id }}">{{ s.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+  <div>
+    <label class="block text-sm font-medium">Актив</label>
+    <select name="asset_id" class="border px-2 py-1 rounded">
+      {% for asset in assets %}
+        <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium">Сумма</label>
+    <input type="number" step="0.0001" name="amount" class="border px-2 py-1 rounded" required>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium">Комментарий</label>
+    <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+  </div>
+
+  <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Перевести</button>
+</form>
+
     <!-- Балансы -->
     <h2 class="section-title">Балансы</h2>
     <table class="custom-table mb-6">

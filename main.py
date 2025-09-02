@@ -266,14 +266,18 @@ def index():
     # сервис по умолчанию
     service_id = request.args.get("service_id", type=int)
     if user.role == "admin":
+        # админ видит все сервисы
         if service_id:
             service = db.query(Service).get(service_id)
         else:
             service = db.query(Service).first()
         services = db.query(Service).all()
     else:
+        # оператор работает только со своим сервисом
         service = db.query(Service).get(user.service_id)
-        services = [service]
+        # ⚡ исправляем: оператору отдаём все сервисы (для "куда"),
+        # но в "откуда" в шаблоне останется только его
+        services = db.query(Service).all()
 
     # пагинация
     page = int(request.args.get("page", 1))
@@ -304,14 +308,14 @@ def index():
 
     return render_template(
         "index.html",
-        user=user,
         service=service,
-        services=services,
         balances=balances,
         orders=orders,
         page=page,
         has_next=has_next,
         assets=assets,
+        services=services,   # 👈 вот это
+        user=user            # чтобы в шаблоне можно было проверить роль
     )
 
 @app.route("/shift/start/<int:service_id>")
@@ -433,7 +437,168 @@ def shift_report_html():
         balances=balances
     )
 
+@app.route("/admin_action", methods=["POST"])
+def admin_action():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
 
+    db = SessionLocal()
+    user = db.query(User).get(session["user_id"])
+
+    if user.role != "admin":
+        db.close()
+        return "Доступ запрещён", 403
+
+    service_id = int(request.form["service_id"])
+    asset_id = int(request.form["asset_id"])
+    amount = float(request.form["amount"])
+    action_type = request.form["action_type"]  # deposit / withdraw
+    comment = request.form.get("comment", "")
+
+    # логика изменения баланса
+    balance = (
+        db.query(Balance)
+        .filter(Balance.service_id == service_id, Balance.asset_id == asset_id)
+        .first()
+    )
+    if not balance:
+        balance = Balance(service_id=service_id, asset_id=asset_id, amount=0)
+        db.add(balance)
+        db.commit()
+        db.refresh(balance)
+
+    old_amount = balance.amount
+    if action_type == "deposit":
+        balance.amount += amount
+    elif action_type == "withdraw":
+        balance.amount -= amount
+
+    # сохраняем изменение в истории
+    hist = BalanceHistory(
+        service_id=service_id,
+        asset_id=asset_id,
+        old_amount=old_amount,
+        new_amount=balance.amount,
+        change=balance.amount - old_amount,
+    )
+    db.add(hist)
+
+    # фиксируем как «админскую операцию» в ордерах
+    order = Order(
+        service_id=service_id,
+        user_id=user.id,
+        shift_id=None,  # не привязываем к смене
+        type="admin_action",
+        is_manual=True,
+        received_asset_id=None,
+        received_amount=0,
+        given_asset_id=asset_id,
+        given_amount=amount if action_type == "withdraw" else 0,
+        comment=comment or f"{action_type} {amount}",
+        rate_at_execution={},
+        profit_percent=0,
+    )
+    db.add(order)
+
+    db.commit()
+    db.close()
+    return redirect(url_for("index"))
+
+@app.route("/internal_transfer", methods=["POST"])
+def internal_transfer():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    db = SessionLocal()
+    user = db.query(User).get(session["user_id"])
+
+    from_service_id = int(request.form["from_service_id"])
+    to_service_id = int(request.form["to_service_id"])
+    asset_id = int(request.form["asset_id"])
+    amount = float(request.form["amount"])
+    comment = request.form.get("comment", "")
+
+    # --- обновляем баланс отправителя ---
+    from_balance = (
+        db.query(Balance)
+        .filter(Balance.service_id == from_service_id, Balance.asset_id == asset_id)
+        .first()
+    )
+    if not from_balance:
+        from_balance = Balance(service_id=from_service_id, asset_id=asset_id, amount=0)
+        db.add(from_balance)
+        db.commit()
+        db.refresh(from_balance)
+
+    old_from_amount = from_balance.amount
+    from_balance.amount -= amount
+    db.add(BalanceHistory(
+        service_id=from_service_id,
+        asset_id=asset_id,
+        old_amount=old_from_amount,
+        new_amount=from_balance.amount,
+        change=-amount,
+    ))
+
+    # --- обновляем баланс получателя ---
+    to_balance = (
+        db.query(Balance)
+        .filter(Balance.service_id == to_service_id, Balance.asset_id == asset_id)
+        .first()
+    )
+    if not to_balance:
+        to_balance = Balance(service_id=to_service_id, asset_id=asset_id, amount=0)
+        db.add(to_balance)
+        db.commit()
+        db.refresh(to_balance)
+
+    old_to_amount = to_balance.amount
+    to_balance.amount += amount
+    db.add(BalanceHistory(
+        service_id=to_service_id,
+        asset_id=asset_id,
+        old_amount=old_to_amount,
+        new_amount=to_balance.amount,
+        change=amount,
+    ))
+
+    # --- создаём заявку у отправителя ---
+    order_out = Order(
+        service_id=from_service_id,
+        user_id=user.id,
+        shift_id=None,
+        type="internal_transfer",
+        is_manual=True,
+        received_asset_id=None,
+        received_amount=0.0,
+        given_asset_id=asset_id,
+        given_amount=amount,
+        comment=comment or f"Перевод {amount} актива в сервис {to_service_id}",
+        rate_at_execution={},
+        profit_percent=0,
+    )
+    db.add(order_out)
+
+    # --- создаём заявку у получателя ---
+    order_in = Order(
+        service_id=to_service_id,
+        user_id=user.id,
+        shift_id=None,
+        type="internal_transfer",
+        is_manual=True,
+        received_asset_id=asset_id,
+        received_amount=amount,
+        given_asset_id=None,
+        given_amount=0.0,
+        comment=comment or f"Перевод {amount} актива из сервиса {from_service_id}",
+        rate_at_execution={},
+        profit_percent=0,
+    )
+    db.add(order_in)
+
+    db.commit()
+    db.close()
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
