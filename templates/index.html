@@ -83,6 +83,26 @@
 </form>
 {% endif %}
 
+    <!-- Балансы -->
+    <h2 class="section-title mb-4">Балансы</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+  {% for balance, asset in balances %}
+  <div class="bg-white p-6 rounded-lg shadow flex items-center gap-4">
+    <div class="w-12 h-12 flex items-center justify-center rounded-full 
+                {% if asset.symbol == 'BTC' %} bg-yellow-100 text-yellow-600
+                {% elif asset.symbol == 'ETH' %} bg-purple-100 text-purple-600
+                {% elif asset.symbol == 'USDT' %} bg-green-100 text-green-600
+                {% else %} bg-gray-100 text-gray-600 {% endif %}">
+      <span class="text-xl font-bold">{{ asset.symbol[0] }}</span>
+    </div>
+    <div>
+      <div class="text-lg font-semibold">{{ asset.symbol }}</div>
+      <div class="text-gray-600">{{ "%.4f"|format(balance.amount) }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
 <h2 class="section-title mt-8">Перевод между сервисами</h2>
 <form action="{{ url_for('internal_transfer') }}" method="post" class="bg-white p-4 rounded shadow space-y-3">
   <div>
@@ -130,18 +150,7 @@
   <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Перевести</button>
 </form>
 
-    <!-- Балансы -->
-    <h2 class="section-title">Балансы</h2>
-    <table class="custom-table mb-6">
-      <thead>
-        <tr><th>Актив</th><th>Сумма</th></tr>
-      </thead>
-      <tbody>
-        {% for balance, asset in balances %}
-        <tr><td>{{ asset.symbol }}</td><td>{{ balance.amount }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
 
     <div class="flex justify-between items-center mb-4">
   <h2 class="section-title">Заявки</h2>
@@ -151,38 +160,120 @@
   </a>
 </div>
 
+<!-- Фильтры -->
+<form method="get" action="{{ url_for('index') }}" class="bg-white p-4 rounded shadow mb-4 flex flex-wrap gap-4 items-end">
+
+  <!-- Тип заявки -->
+  <div>
+    <label class="block text-sm font-medium">Тип заявки</label>
+    <select name="type" class="border px-2 py-1 rounded">
+      <option value="">Все</option>
+      <option value="manual" {% if request.args.get('type') == 'manual' %}selected{% endif %}>Ручные</option>
+      <option value="auto" {% if request.args.get('type') == 'auto' %}selected{% endif %}>Авто</option>
+      <option value="admin_action" {% if request.args.get('type') == 'admin_action' %}selected{% endif %}>Админ</option>
+      <option value="internal_transfer" {% if request.args.get('type') == 'internal_transfer' %}selected{% endif %}>Переводы</option>
+    </select>
+  </div>
+
+  <!-- Актив -->
+  <div>
+    <label class="block text-sm font-medium">Актив</label>
+    <select name="asset" class="border px-2 py-1 rounded">
+      <option value="">Все</option>
+      {% for asset in assets %}
+        <option value="{{ asset.symbol }}" {% if request.args.get('asset') == asset.symbol %}selected{% endif %}>
+          {{ asset.symbol }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <!-- Оператор -->
+  <div>
+    <label class="block text-sm font-medium">Оператор</label>
+    <select name="operator_id" class="border px-2 py-1 rounded">
+      <option value="">Все</option>
+      {% for op in operators %}
+        <option value="{{ op.id }}" {% if request.args.get('operator_id') == op.id|string %}selected{% endif %}>
+          {{ op.login }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <!-- Поиск -->
+  <div>
+    <label class="block text-sm font-medium">Поиск по комментарию</label>
+    <input type="text" name="search" value="{{ request.args.get('search', '') }}"
+           class="border px-2 py-1 rounded" placeholder="Комментарий...">
+  </div>
+
+  <!-- Кнопка -->
+  <div>
+    <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Фильтровать</button>
+  </div>
+</form>
+
     <!-- Заявки -->
-    <h2 class="section-title">Заявки</h2>
-    <table class="custom-table">
-  <thead>
+    <h2 class="section-title mb-4">Заявки</h2>
+<table class="min-w-full bg-white rounded-lg shadow overflow-hidden">
+  <thead class="bg-gray-100 text-left text-sm font-semibold text-gray-700">
     <tr>
-      <th>ID</th>
-      <th>Тип</th>
-      <th>Оператор</th>
-      <th>Получили</th>
-      <th>Отдали</th>
-      <th>Комментарий</th>
-      <th>Прибыль (%)</th>
+      <th class="p-3">ID</th>
+      <th class="p-3">Тип</th>
+      <th class="p-3">Оператор</th>
+      <th class="p-3">Получили</th>
+      <th class="p-3">Отдали</th>
+      <th class="p-3">Комментарий</th>
+      <th class="p-3">Прибыль (%)</th>
     </tr>
   </thead>
-  <tbody>
+  <tbody class="text-sm divide-y divide-gray-200">
     {% for o in orders %}
-    <tr class="
-      {% if o.type == 'admin_action' %} bg-yellow-50 
-      {% elif o.type == 'internal_transfer' %} bg-blue-50 
-      {% else %} bg-green-50 {% endif %}
-    ">
-      <td>{{ o.id }}</td>
-      <td>{{ o.type }}</td>
-      <td>{{ o.user.login if o.user else '-' }}</td>
-      <td>{{ o.received_amount }}</td>
-      <td>{{ o.given_amount }}</td>
-      <td>{{ o.comment }}</td>
-      <td>
-        {% if o.profit_percent %}
-          {{ "%.2f"|format(o.profit_percent) }} %
+    <tr>
+      <!-- ID -->
+      <td class="p-3 font-mono text-gray-600">{{ o.id }}</td>
+
+      <!-- Тип заявки -->
+      <td class="p-3">
+        {% if o.type == "admin_action" %}
+          <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Админ</span>
+        {% elif o.type == "internal_transfer" %}
+          <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Перевод</span>
         {% else %}
-          -
+          <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Заявка</span>
+        {% endif %}
+      </td>
+
+      <!-- Оператор -->
+      <td class="p-3 flex items-center gap-2">
+        <div class="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-700 text-xs font-bold">
+          {{ o.user.login[0]|upper if o.user else "?" }}
+        </div>
+        <span>{{ o.user.login if o.user else "-" }}</span>
+      </td>
+
+      <!-- Получили -->
+      <td class="p-3 font-medium text-green-600">
+        {{ o.received_amount }} {{ o.received_asset.symbol if o.received_asset else "" }}
+      </td>
+
+      <!-- Отдали -->
+      <td class="p-3 font-medium text-red-600">
+        {{ o.given_amount }} {{ o.given_asset.symbol if o.given_asset else "" }}
+      </td>
+
+      <!-- Комментарий -->
+      <td class="p-3 text-gray-600">{{ o.comment }}</td>
+
+      <!-- Прибыль -->
+      <td class="p-3">
+        {% if o.profit_percent > 0 %}
+          <span class="text-green-600 font-semibold">+{{ "%.2f"|format(o.profit_percent) }}%</span>
+        {% elif o.profit_percent < 0 %}
+          <span class="text-red-600 font-semibold">{{ "%.2f"|format(o.profit_percent) }}%</span>
+        {% else %}
+          <span class="text-gray-400">0%</span>
         {% endif %}
       </td>
     </tr>

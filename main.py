@@ -261,66 +261,88 @@ def get_shift_report(db: Session, service_id: int):
 @app.route("/")
 def index():
     if "user_id" not in session:
-        return redirect(url_for("login"))
-
+        return redirect(url_for("login"))       
     db = SessionLocal()
     user = db.query(User).get(session["user_id"])
-
-    # сервис по умолчанию
     service_id = request.args.get("service_id", type=int)
-    if user.role == "admin":
-        # админ видит все сервисы
-        if service_id:
-            service = db.query(Service).get(service_id)
-        else:
-            service = db.query(Service).first()
-        services = db.query(Service).all()
-    else:
-        # оператор работает только со своим сервисом
-        service = db.query(Service).get(user.service_id)
-        # ⚡ исправляем: оператору отдаём все сервисы (для "куда"),
-        # но в "откуда" в шаблоне останется только его
-        services = db.query(Service).all()
 
-    # пагинация
+    # если админ выбирает сервис вручную
+    if user.role == "admin" and service_id:
+        service = db.query(Service).get(service_id)
+    else:
+        service = db.query(Service).get(user.service_id)
+
+    balances, orders, assets = [], [], []
+
     page = int(request.args.get("page", 1))
     per_page = 10
     offset = (page - 1) * per_page
 
-    balances, orders, assets = [], [], []
     if service:
+        # балансы
         balances = (
             db.query(Balance, Asset)
             .join(Asset, Balance.asset_id == Asset.id)
             .filter(Balance.service_id == service.id)
             .all()
         )
-        orders = (
+
+        # базовый запрос по заявкам
+        query = (
             db.query(Order)
-            .options(joinedload(Order.user))   # 🔹 подтягиваем пользователя сразу
+            .options(joinedload(Order.user))
             .filter(Order.service_id == service.id)
-            .order_by(Order.id.desc())
+        )
+
+        # === ФИЛЬТРЫ ===
+        order_type = request.args.get("type")
+        if order_type:
+            query = query.filter(Order.type == order_type)
+
+        asset_filter = request.args.get("asset")
+        if asset_filter:
+            query = query.join(Asset, Order.received_asset_id == Asset.id).filter(
+                Asset.symbol == asset_filter
+            )
+
+        operator_id = request.args.get("operator_id", type=int)
+        if operator_id:
+            query = query.filter(Order.user_id == operator_id)
+
+        search = request.args.get("search")
+        if search:
+            query = query.filter(Order.comment.ilike(f"%{search}%"))
+
+        # пагинация
+        orders = (
+            query.order_by(Order.id.desc())
             .offset(offset)
             .limit(per_page + 1)
             .all()
         )
+
         assets = db.query(Asset).all()
 
     db.close()
+
     has_next = len(orders) > per_page
     orders = orders[:per_page]
 
     return render_template(
         "index.html",
+        user=user,
         service=service,
         balances=balances,
         orders=orders,
         page=page,
         has_next=has_next,
         assets=assets,
-        services=services,   # 👈 вот это
-        user=user            # чтобы в шаблоне можно было проверить роль
+        services=db.query(Service).all(),   # для селекторов сервисов
+        operators=db.query(User).filter(User.service_id == service.id).all(),  # 🔹 добавил список операторов
+        request=request,
     )
+
+
 
 @app.route("/shift/start/<int:service_id>")
 def shift_start(service_id):
