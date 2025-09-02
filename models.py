@@ -37,10 +37,14 @@ class Balance(Base):
 
 class Shift(Base):
     __tablename__ = "shifts"
+
     id = Column(Integer, primary_key=True)
+    number = Column(Integer, nullable=False)  # 1, 2 или 3
     service_id = Column(Integer, ForeignKey("services.id"))
     start_time = Column(DateTime, default=datetime.utcnow)
     end_time = Column(DateTime, nullable=True)
+    started_by = Column(Integer, ForeignKey("users.id"))
+    user = relationship("User")
 
 
 class Order(Base):

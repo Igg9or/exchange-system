@@ -8,326 +8,182 @@
 </head>
 <body class="bg-gray-100 text-gray-900">
 
-<header class="bg-white shadow p-4 mb-6 flex justify-between items-center">
+<header class="bg-white shadow p-4 mb-4 flex justify-between items-center">
   <div>
     <span class="font-semibold">Привет, {{ user.login }}</span>
     <span class="text-gray-500 text-sm"> ({{ user.role }})</span>
   </div>
-  <div class="flex items-center gap-4">
+  <div class="flex items-center gap-3">
     {% if user.role == "admin" %}
-      <form method="get" action="{{ url_for('index') }}">
-        <select name="service_id" onchange="this.form.submit()" class="border rounded px-2 py-1">
-          {% for s in services %}
-            <option value="{{ s.id }}" {% if service and service.id == s.id %}selected{% endif %}>
-              {{ s.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </form>
-    {% else %}
-      <span class="text-gray-600">Сервис: {{ service.name }}</span>
+      <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
     {% endif %}
-    {% if user.role == "admin" %}
-  <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
-{% endif %}
     <a href="{{ url_for('logout') }}" class="bg-red-500 text-white px-3 py-1 rounded">Выйти</a>
   </div>
 </header>
-  <div class="container mx-auto p-6">
 
-    <h1 class="text-2xl font-bold mb-6">
-      Сервис: {{ service.name if service else "Нет сервиса" }}
-    </h1>
+<div class="container mx-auto px-4">
 
-
-    {% if user.role == "admin" %}
-<h2 class="section-title mt-8">Админская операция</h2>
-<form action="{{ url_for('admin_action') }}" method="post" class="bg-white p-4 rounded shadow space-y-3">
-  <div>
-    <label class="block text-sm font-medium">Сервис</label>
-    <select name="service_id" class="border px-2 py-1 rounded">
-      {% for s in services %}
-        <option value="{{ s.id }}">{{ s.name }}</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium">Актив</label>
-    <select name="asset_id" class="border px-2 py-1 rounded">
-      {% for asset in assets %}
-        <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium">Операция</label>
-    <select name="action_type" class="border px-2 py-1 rounded">
-      <option value="deposit">Пополнение</option>
-      <option value="withdraw">Вывод</option>
-    </select>
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium">Сумма</label>
-    <input type="number" step="0.0001" name="amount" class="border px-2 py-1 rounded" required>
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium">Комментарий</label>
-    <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
-  </div>
-
-  <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded">Выполнить</button>
-</form>
-{% endif %}
-
-    <!-- Балансы -->
-    <h2 class="section-title mb-4">Балансы</h2>
-<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-  {% for balance, asset in balances %}
-  <div class="bg-white p-6 rounded-lg shadow flex items-center gap-4">
-    <div class="w-12 h-12 flex items-center justify-center rounded-full 
-                {% if asset.symbol == 'BTC' %} bg-yellow-100 text-yellow-600
-                {% elif asset.symbol == 'ETH' %} bg-purple-100 text-purple-600
-                {% elif asset.symbol == 'USDT' %} bg-green-100 text-green-600
-                {% else %} bg-gray-100 text-gray-600 {% endif %}">
-      <span class="text-xl font-bold">{{ asset.symbol[0] }}</span>
-    </div>
-    <div>
-      <div class="text-lg font-semibold">{{ asset.symbol }}</div>
-      <div class="text-gray-600">{{ "%.4f"|format(balance.amount) }}</div>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
-<h2 class="section-title mt-8">Перевод между сервисами</h2>
-<form action="{{ url_for('internal_transfer') }}" method="post" class="bg-white p-4 rounded shadow space-y-3">
-  <div>
-  <label class="block text-sm font-medium">Откуда (сервис)</label>
-  <select name="from_service_id" class="border px-2 py-1 rounded" {% if user.role == 'operator' %} disabled {% endif %}>
-    {% for s in services %}
-      <option value="{{ s.id }}" {% if user.role == 'operator' and s.id == service.id %} selected {% endif %}>
-        {{ s.name }}
-      </option>
-    {% endfor %}
-  </select>
-  {% if user.role == 'operator' %}
-    <input type="hidden" name="from_service_id" value="{{ service.id }}">
-  {% endif %}
-</div>
-
-  <div>
-  <label class="block text-sm font-medium">Куда (сервис)</label>
-  <select name="to_service_id" class="border px-2 py-1 rounded">
-    {% for s in services %}
-      <option value="{{ s.id }}">{{ s.name }}</option>
-    {% endfor %}
-  </select>
-</div>
-
-  <div>
-    <label class="block text-sm font-medium">Актив</label>
-    <select name="asset_id" class="border px-2 py-1 rounded">
-      {% for asset in assets %}
-        <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium">Сумма</label>
-    <input type="number" step="0.0001" name="amount" class="border px-2 py-1 rounded" required>
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium">Комментарий</label>
-    <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
-  </div>
-
-  <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Перевести</button>
-</form>
-
-
-
-    <div class="flex justify-between items-center mb-4">
-  <h2 class="section-title">Заявки</h2>
-  <a href="{{ url_for('shift_report_html') }}" 
-     class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
-    📊 Отчёт по смене
-  </a>
-</div>
-
-<!-- Фильтры -->
-<form method="get" action="{{ url_for('index') }}" class="bg-white p-4 rounded shadow mb-4 flex flex-wrap gap-4 items-end">
-
-  <!-- Тип заявки -->
-  <div>
-    <label class="block text-sm font-medium">Тип заявки</label>
-    <select name="type" class="border px-2 py-1 rounded">
-      <option value="">Все</option>
-      <option value="manual" {% if request.args.get('type') == 'manual' %}selected{% endif %}>Ручные</option>
-      <option value="auto" {% if request.args.get('type') == 'auto' %}selected{% endif %}>Авто</option>
-      <option value="admin_action" {% if request.args.get('type') == 'admin_action' %}selected{% endif %}>Админ</option>
-      <option value="internal_transfer" {% if request.args.get('type') == 'internal_transfer' %}selected{% endif %}>Переводы</option>
-    </select>
-  </div>
-
-  <!-- Актив -->
-  <div>
-    <label class="block text-sm font-medium">Актив</label>
-    <select name="asset" class="border px-2 py-1 rounded">
-      <option value="">Все</option>
-      {% for asset in assets %}
-        <option value="{{ asset.symbol }}" {% if request.args.get('asset') == asset.symbol %}selected{% endif %}>
-          {{ asset.symbol }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <!-- Оператор -->
-  <div>
-    <label class="block text-sm font-medium">Оператор</label>
-    <select name="operator_id" class="border px-2 py-1 rounded">
-      <option value="">Все</option>
-      {% for op in operators %}
-        <option value="{{ op.id }}" {% if request.args.get('operator_id') == op.id|string %}selected{% endif %}>
-          {{ op.login }}
-        </option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <!-- Поиск -->
-  <div>
-    <label class="block text-sm font-medium">Поиск по комментарию</label>
-    <input type="text" name="search" value="{{ request.args.get('search', '') }}"
-           class="border px-2 py-1 rounded" placeholder="Комментарий...">
-  </div>
-
-  <!-- Кнопка -->
-  <div>
-    <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Фильтровать</button>
-  </div>
-</form>
-
-    <!-- Заявки -->
-    <h2 class="section-title mb-4">Заявки</h2>
-<table class="min-w-full bg-white rounded-lg shadow overflow-hidden">
-  <thead class="bg-gray-100 text-left text-sm font-semibold text-gray-700">
-    <tr>
-      <th class="p-3">ID</th>
-      <th class="p-3">Тип</th>
-      <th class="p-3">Оператор</th>
-      <th class="p-3">Получили</th>
-      <th class="p-3">Отдали</th>
-      <th class="p-3">Комментарий</th>
-      <th class="p-3">Прибыль (%)</th>
-    </tr>
-  </thead>
-  <tbody class="text-sm divide-y divide-gray-200">
-    {% for o in orders %}
-    <tr>
-      <!-- ID -->
-      <td class="p-3 font-mono text-gray-600">{{ o.id }}</td>
-
-      <!-- Тип заявки -->
-      <td class="p-3">
-        {% if o.type == "admin_action" %}
-          <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Админ</span>
-        {% elif o.type == "internal_transfer" %}
-          <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Перевод</span>
-        {% else %}
-          <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Заявка</span>
-        {% endif %}
-      </td>
-
-      <!-- Оператор -->
-      <td class="p-3 flex items-center gap-2">
-        <div class="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-700 text-xs font-bold">
-          {{ o.user.login[0]|upper if o.user else "?" }}
+  <!-- Балансы -->
+  <div class="grid grid-cols-3 md:grid-cols-5 gap-3 mb-4">
+    {% for balance, asset in balances %}
+      <div class="bg-white p-3 rounded shadow flex flex-col items-center">
+        <div class="text-2xl font-bold">
+          {% if asset.symbol == "BTC" %} ₿
+          {% elif asset.symbol == "USDT" %} 💵
+          {% elif asset.symbol == "RUB" %} ₽
+          {% else %} 🔹
+          {% endif %}
         </div>
-        <span>{{ o.user.login if o.user else "-" }}</span>
-      </td>
-
-      <!-- Получили -->
-      <td class="p-3 font-medium text-green-600">
-        {{ o.received_amount }} {{ o.received_asset.symbol if o.received_asset else "" }}
-      </td>
-
-      <!-- Отдали -->
-      <td class="p-3 font-medium text-red-600">
-        {{ o.given_amount }} {{ o.given_asset.symbol if o.given_asset else "" }}
-      </td>
-
-      <!-- Комментарий -->
-      <td class="p-3 text-gray-600">{{ o.comment }}</td>
-
-      <!-- Прибыль -->
-      <td class="p-3">
-        {% if o.profit_percent > 0 %}
-          <span class="text-green-600 font-semibold">+{{ "%.2f"|format(o.profit_percent) }}%</span>
-        {% elif o.profit_percent < 0 %}
-          <span class="text-red-600 font-semibold">{{ "%.2f"|format(o.profit_percent) }}%</span>
-        {% else %}
-          <span class="text-gray-400">0%</span>
-        {% endif %}
-      </td>
-    </tr>
+        <div class="font-semibold">{{ asset.symbol }}</div>
+        <div class="text-gray-600 text-sm">{{ "%.4f"|format(balance.amount) }}</div>
+      </div>
     {% endfor %}
-  </tbody>
-</table>
+  </div>
 
-    
-    <!-- Пагинация -->
-    <div class="pagination">
-      {% if page > 1 %}
-        <a href="{{ url_for('index', page=page-1) }}" class="page-btn">⬅ Назад</a>
-      {% endif %}
-      <span class="page-current">Стр. {{ page }}</span>
-      {% if has_next %}
-        <a href="{{ url_for('index', page=page+1) }}" class="page-btn">Вперёд ➡</a>
+  <!-- Панель смен -->
+<div class="bg-white p-4 rounded shadow flex flex-col gap-3 mb-4">
+  <div class="flex justify-between items-center">
+    <div>
+      {% if current_shift %}
+        <p><b>Активная смена:</b> {{ current_shift.number }}</p>
+        <p><b>Запустил:</b> {{ current_shift.user.login if current_shift.user else '-' }}</p>
+        <p><b>Время начала:</b> {{ current_shift.start_time }}</p>
+      {% else %}
+        <p>Нет активной смены</p>
       {% endif %}
     </div>
-
-    <!-- СОЗДАНИЕ ЗАЯВКИ -->
-<h2 class="section-title mt-8">Создать заявку</h2>
-<form action="{{ url_for('add_order') }}" method="post" class="bg-white p-4 rounded shadow space-y-3">
-  <input type="hidden" name="service_id" value="{{ service.id }}">
-  <input type="hidden" name="user_id" value="1"> <!-- пока жёстко ставим operator1 -->
-
-  <div>
-  <label class="block text-sm font-medium">Получили</label>
-  <select name="received_asset_id" class="border px-2 py-1 rounded">
-    {% for asset in assets %}
-      <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-    {% endfor %}
-  </select>
-  <input type="text" name="received_amount" placeholder="Сумма" class="border px-2 py-1 rounded">
-</div>
-
-<div>
-  <label class="block text-sm font-medium">Отдали</label>
-  <select name="given_asset_id" class="border px-2 py-1 rounded">
-    {% for asset in assets %}
-      <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-    {% endfor %}
-  </select>
-  <input type="text" name="given_amount" placeholder="Сумма" class="border px-2 py-1 rounded">
-</div>
-
-  <div>
-    <label class="block text-sm font-medium">Комментарий</label>
-    <input type="text" name="comment" placeholder="Комментарий" class="border w-full px-2 py-1 rounded">
   </div>
 
-  <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Добавить</button>
-</form>
-
-
+  <!-- Кнопки переключения смен -->
+  <div class="flex gap-6">
+    {% for i in range(1,4) %}
+      <form action="{{ url_for('set_shift') }}" method="post"
+            onsubmit="return confirm('Закрыть текущую смену и открыть смену {{ i }}?')">
+        <input type="hidden" name="shift_number" value="{{ i }}">
+        <button type="submit"
+          class="px-3 py-1 rounded {{ 'bg-green-500 text-white' if current_shift and current_shift.number == i else 'bg-gray-200' }}">
+          Смена {{ i }}
+        </button>
+      </form>
+    {% endfor %}
   </div>
+</div>
+
+  <!-- Фильтры -->
+  <div class="bg-white p-3 rounded shadow flex justify-between items-center mb-4">
+    <form method="get" class="flex gap-3">
+      <select name="type" class="border px-2 py-1 rounded">
+        <option value="">Все типы</option>
+        <option value="internal_transfer" {% if request.args.get('type') == 'internal_transfer' %}selected{% endif %}>Перевод</option>
+        <option value="admin_action" {% if request.args.get('type') == 'admin_action' %}selected{% endif %}>Админ</option>
+      </select>
+      <select name="asset_id" class="border px-2 py-1 rounded">
+        <option value="">Все активы</option>
+        {% for asset in assets %}
+          <option value="{{ asset.id }}" {% if request.args.get('asset_id') == asset.id|string %}selected{% endif %}>{{ asset.symbol }}</option>
+        {% endfor %}
+      </select>
+      <select name="operator_id" class="border px-2 py-1 rounded">
+        <option value="">Все операторы</option>
+        {% for u in all_users %}
+          <option value="{{ u.id }}" {% if request.args.get('operator_id') == u.id|string %}selected{% endif %}>{{ u.login }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" name="comment" placeholder="Комментарий..." value="{{ request.args.get('comment','') }}"
+             class="border px-2 py-1 rounded">
+      <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Фильтровать</button>
+    </form>
+
+    <!-- Кнопка перевода между сервисами -->
+    <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
+      class="bg-green-600 text-white px-3 py-1 rounded">Перевод между сервисами</button>
+  </div>
+
+  <!-- Таблица заявок -->
+  <div class="bg-white p-3 rounded shadow">
+    <table class="w-full text-sm border-collapse">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="p-2 border">ID</th>
+          <th class="p-2 border">Тип</th>
+          <th class="p-2 border">Оператор</th>
+          <th class="p-2 border">Получили</th>
+          <th class="p-2 border">Отдали</th>
+          <th class="p-2 border">Комментарий</th>
+          <th class="p-2 border">Прибыль (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+          <tr>
+            <td class="p-2 border">{{ o.id }}</td>
+            <td class="p-2 border">
+              {% if o.type == 'admin_action' %}
+                <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
+              {% elif o.type == 'internal_transfer' %}
+                <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
+              {% else %}
+                <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
+              {% endif %}
+            </td>
+            <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
+            <td class="p-2 border text-green-600">{{ o.received_amount }}</td>
+            <td class="p-2 border text-red-600">{{ o.given_amount }}</td>
+            <td class="p-2 border">{{ o.comment }}</td>
+            <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Модалка перевода -->
+<div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Перевод между сервисами</h2>
+    <form action="{{ url_for('internal_transfer') }}" method="post" class="space-y-3">
+      <div>
+        <label class="block text-sm">Откуда</label>
+        <select name="from_service_id" class="border w-full px-2 py-1 rounded">
+          {% for s in services %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Куда</label>
+        <select name="to_service_id" class="border w-full px-2 py-1 rounded">
+          {% for s in services %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Актив</label>
+        <select name="asset_id" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Сумма</label>
+        <input type="number" step="0.0001" name="amount" class="border w-full px-2 py-1 rounded">
+      </div>
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('transferModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Перевести</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 </body>
 </html>

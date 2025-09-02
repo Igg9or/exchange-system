@@ -9,6 +9,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash
 from sqlalchemy.orm import joinedload
+from db import get_db
+
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_123"
@@ -81,14 +83,17 @@ def calc_profit(received: float, given: float) -> float:
 
 # ===== СМЕНЫ =====
 
-def start_shift(db: Session, service_id: int):
-    existing = db.query(Shift).filter(
+def start_shift(db: Session, service_id: int, user_id: int):
+    # Закрываем все активные смены
+    active_shifts = db.query(Shift).filter(
         Shift.service_id == service_id,
         Shift.end_time == None
-    ).first()
-    if existing:
-        return existing
-    shift = Shift(service_id=service_id, start_time=datetime.utcnow())
+    ).all()
+    for s in active_shifts:
+        s.end_time = datetime.utcnow()
+
+    # Создаём новую смену
+    shift = Shift(service_id=service_id, started_by=user_id, start_time=datetime.utcnow())
     db.add(shift)
     db.commit()
     db.refresh(shift)
@@ -260,26 +265,14 @@ def get_shift_report(db: Session, service_id: int):
 
 @app.route("/")
 def index():
-    if "user_id" not in session:
-        return redirect(url_for("login"))       
-    db = SessionLocal()
-    user = db.query(User).get(session["user_id"])
-    service_id = request.args.get("service_id", type=int)
+    with get_db() as db:
+        user = db.query(User).get(session.get("user_id"))
+        if not user:
+            return redirect(url_for("login"))
 
-    # если админ выбирает сервис вручную
-    if user.role == "admin" and service_id:
-        service = db.query(Service).get(service_id)
-    else:
         service = db.query(Service).get(user.service_id)
 
-    balances, orders, assets = [], [], []
-
-    page = int(request.args.get("page", 1))
-    per_page = 10
-    offset = (page - 1) * per_page
-
-    if service:
-        # балансы
+        # Балансы
         balances = (
             db.query(Balance, Asset)
             .join(Asset, Balance.asset_id == Asset.id)
@@ -287,67 +280,71 @@ def index():
             .all()
         )
 
-        # базовый запрос по заявкам
-        query = (
-            db.query(Order)
-            .options(joinedload(Order.user))
-            .filter(Order.service_id == service.id)
-        )
+        # Активная смена для текущего сервиса
+        shift_key = f"current_shift_{service.id}"
+        shift_id = session.get(shift_key)
 
-        # === ФИЛЬТРЫ ===
-        order_type = request.args.get("type")
-        if order_type:
-            query = query.filter(Order.type == order_type)
-
-        asset_filter = request.args.get("asset")
-        if asset_filter:
-            query = query.join(Asset, Order.received_asset_id == Asset.id).filter(
-                Asset.symbol == asset_filter
+        if shift_id:
+            current_shift = (
+                db.query(Shift)
+                .options(joinedload(Shift.user))
+                .get(shift_id)
+            )
+        else:
+            current_shift = (
+                db.query(Shift)
+                .options(joinedload(Shift.user))
+                .filter(Shift.service_id == service.id, Shift.end_time.is_(None))
+                .order_by(Shift.start_time.desc())
+                .first()
+                or
+                db.query(Shift)
+                .options(joinedload(Shift.user))
+                .filter(Shift.service_id == service.id)
+                .order_by(Shift.start_time.desc())
+                .first()
             )
 
-        operator_id = request.args.get("operator_id", type=int)
-        if operator_id:
-            query = query.filter(Order.user_id == operator_id)
+        # Фильтры
+        query = db.query(Order).options(joinedload(Order.user))
 
-        search = request.args.get("search")
-        if search:
-            query = query.filter(Order.comment.ilike(f"%{search}%"))
+        if request.args.get("type"):
+            query = query.filter(Order.type == request.args["type"])
+        if request.args.get("asset_id"):
+            query = query.filter(Order.asset_id == int(request.args["asset_id"]))
+        if request.args.get("operator_id"):
+            query = query.filter(Order.user_id == int(request.args["operator_id"]))
+        if request.args.get("comment"):
+            query = query.filter(Order.comment.ilike(f"%{request.args['comment']}%"))
 
-        # пагинация
-        orders = (
-            query.order_by(Order.id.desc())
-            .offset(offset)
-            .limit(per_page + 1)
-            .all()
-        )
+        orders = query.order_by(Order.id.desc()).limit(50).all()
 
+        # Всё нужное до закрытия сессии
+        all_users = db.query(User).all()
         assets = db.query(Asset).all()
+        services = db.query(Service).all()
 
-    db.close()
-
-    has_next = len(orders) > per_page
-    orders = orders[:per_page]
-
+    # ❗ тут уже db закрыт, но данные мы сохранили в переменные
     return render_template(
         "index.html",
         user=user,
-        service=service,
         balances=balances,
         orders=orders,
-        page=page,
-        has_next=has_next,
         assets=assets,
-        services=db.query(Service).all(),   # для селекторов сервисов
-        operators=db.query(User).filter(User.service_id == service.id).all(),  # 🔹 добавил список операторов
-        request=request,
+        services=services,
+        all_users=all_users,
+        current_shift=current_shift,
     )
 
 
 
 @app.route("/shift/start/<int:service_id>")
 def shift_start(service_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
     db = SessionLocal()
-    start_shift(db, service_id)
+    shift = start_shift(db, service_id, session["user_id"])
     db.close()
     return redirect(url_for("index"))
 
@@ -379,7 +376,7 @@ def add_order():
     given_amount = float(request.form["given_amount"])
     comment = request.form.get("comment", "")
 
-    # 🔹 Заглушка курса: считаем прибыль (просто разница)
+    # 🔹 Заглушка курса: считаем прибыль
     profit_percent = ((received_amount - given_amount) / given_amount) * 100 if given_amount > 0 else 0
 
     order = Order(
@@ -393,10 +390,15 @@ def add_order():
         given_amount=given_amount,
         comment=comment,
         profit_percent=profit_percent,
-        rate_at_execution={"stub_rate": 1},  # 🔹 заглушка API
+        rate_at_execution={"stub_rate": 1},  # заглушка API
     )
 
     db.add(order)
+
+    # 🔹 обновляем балансы
+    update_balance(db, service_id, received_asset_id, received_amount)
+    update_balance(db, service_id, given_asset_id, -given_amount)
+
     db.commit()
     db.close()
     return redirect(url_for("index"))
@@ -704,6 +706,46 @@ def delete_user(user_id):
         db.commit()
     db.close()
     return redirect(url_for("users_list"))
+
+@app.route("/set_shift", methods=["POST"])
+def set_shift():
+    # менеджер контекста из db.py
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        if not user:
+            return redirect(url_for("login"))
+
+        # читаем номер смены из формы (совмещаем оба варианта имён)
+        requested_number = int(
+            request.form.get("shift_number") or  # как в index.html
+            request.form.get("shift_id") or      # если где-то осталось старое имя
+            1
+        )
+
+        # закрываем только активную смену ТЕКУЩЕГО сервиса
+        last_shift = (
+            db.query(Shift)
+            .filter(Shift.service_id == user.service_id, Shift.end_time.is_(None))
+            .first()
+        )
+        if last_shift:
+            last_shift.end_time = datetime.utcnow()
+
+        # создаём новую смену с правильным service_id и номером
+        new_shift = Shift(
+            number=requested_number,
+            service_id=user.service_id,
+            start_time=datetime.utcnow(),
+            started_by=user.id,
+        )
+        db.add(new_shift)
+        db.commit()
+        db.refresh(new_shift)
+
+        # сохраняем активную смену в сессии ПО СЕРВИСУ
+        session[f"current_shift_{user.service_id}"] = new_shift.id
+
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
