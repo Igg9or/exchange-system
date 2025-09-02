@@ -27,6 +27,9 @@
     {% else %}
       <span class="text-gray-600">Сервис: {{ service.name }}</span>
     {% endif %}
+    {% if user.role == "admin" %}
+  <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
+{% endif %}
     <a href="{{ url_for('logout') }}" class="bg-red-500 text-white px-3 py-1 rounded">Выйти</a>
   </div>
 </header>
@@ -151,21 +154,41 @@
     <!-- Заявки -->
     <h2 class="section-title">Заявки</h2>
     <table class="custom-table">
-      <thead>
-        <tr><th>ID</th><th>Тип</th><th>Получили</th><th>Отдали</th><th>Комментарий</th></tr>
-      </thead>
-      <tbody>
-        {% for o in orders %}
-        <tr>
-          <td>{{ o.id }}</td>
-          <td>{{ o.type }}</td>
-          <td>{{ o.received_amount }}</td>
-          <td>{{ o.given_amount }}</td>
-          <td>{{ o.comment }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Тип</th>
+      <th>Оператор</th>
+      <th>Получили</th>
+      <th>Отдали</th>
+      <th>Комментарий</th>
+      <th>Прибыль (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in orders %}
+    <tr class="
+      {% if o.type == 'admin_action' %} bg-yellow-50 
+      {% elif o.type == 'internal_transfer' %} bg-blue-50 
+      {% else %} bg-green-50 {% endif %}
+    ">
+      <td>{{ o.id }}</td>
+      <td>{{ o.type }}</td>
+      <td>{{ o.user.login if o.user else '-' }}</td>
+      <td>{{ o.received_amount }}</td>
+      <td>{{ o.given_amount }}</td>
+      <td>{{ o.comment }}</td>
+      <td>
+        {% if o.profit_percent %}
+          {{ "%.2f"|format(o.profit_percent) }} %
+        {% else %}
+          -
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 
     
     <!-- Пагинация -->

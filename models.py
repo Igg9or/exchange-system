@@ -1,12 +1,13 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, DateTime, JSON
 from datetime import datetime
 from db import Base
-
+from sqlalchemy.orm import relationship
 
 class Service(Base):
     __tablename__ = "services"
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True)
+    users = relationship("User", back_populates="service")
 
 
 class User(Base):
@@ -16,6 +17,7 @@ class User(Base):
     password_hash = Column(String)
     role = Column(String)  # "operator" | "admin"
     service_id = Column(Integer, ForeignKey("services.id"), nullable=True)
+    service = relationship("Service", back_populates="users")
 
 
 class Asset(Base):
@@ -59,6 +61,7 @@ class Order(Base):
     rate_at_creation = Column(JSON, nullable=True)
     rate_at_execution = Column(JSON, nullable=True)
     profit_percent = Column(Float, nullable=True)
+    user = relationship("User")
 
 
 class BalanceHistory(Base):

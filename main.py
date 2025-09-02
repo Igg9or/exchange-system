@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 from collections import defaultdict
 from flask import Flask, render_template, redirect, url_for, request, session, flash
 from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy.orm import joinedload
+from werkzeug.security import generate_password_hash
+from sqlalchemy.orm import joinedload
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_123"
@@ -294,6 +297,7 @@ def index():
         )
         orders = (
             db.query(Order)
+            .options(joinedload(Order.user))   # 🔹 подтягиваем пользователя сразу
             .filter(Order.service_id == service.id)
             .order_by(Order.id.desc())
             .offset(offset)
@@ -341,29 +345,37 @@ def shift_report(service_id):
     db.close()
     return report
 
-@app.route("/order/add", methods=["POST"])
+@app.route("/add_order", methods=["POST"])
 def add_order():
     db = SessionLocal()
+    user = db.query(User).get(session["user_id"])
+
     service_id = int(request.form["service_id"])
-    user_id = int(request.form["user_id"])
     received_asset_id = int(request.form["received_asset_id"])
     received_amount = float(request.form["received_amount"])
     given_asset_id = int(request.form["given_asset_id"])
     given_amount = float(request.form["given_amount"])
     comment = request.form.get("comment", "")
 
-    # создаём заявку
-    create_order(
-        db,
+    # 🔹 Заглушка курса: считаем прибыль (просто разница)
+    profit_percent = ((received_amount - given_amount) / given_amount) * 100 if given_amount > 0 else 0
+
+    order = Order(
         service_id=service_id,
-        user_id=user_id,
+        user_id=user.id,
+        is_manual=True,
+        type="manual",
         received_asset_id=received_asset_id,
         received_amount=received_amount,
         given_asset_id=given_asset_id,
         given_amount=given_amount,
         comment=comment,
+        profit_percent=profit_percent,
+        rate_at_execution={"stub_rate": 1},  # 🔹 заглушка API
     )
 
+    db.add(order)
+    db.commit()
     db.close()
     return redirect(url_for("index"))
 
@@ -599,6 +611,77 @@ def internal_transfer():
     db.commit()
     db.close()
     return redirect(url_for("index"))
+
+
+@app.route("/users")
+def users_list():
+    db = SessionLocal()
+    users = db.query(User).options(joinedload(User.service)).all()
+    services = db.query(Service).all()
+    db.close()
+    return render_template("users.html", users=users, services=services)
+
+
+@app.route("/users/add", methods=["POST"])
+def add_user():
+    if session.get("role") != "admin":
+        return redirect(url_for("index"))
+
+    login = request.form["login"]
+    password = request.form["password"]
+    role = request.form["role"]
+    service_id = request.form.get("service_id")
+
+    db = SessionLocal()
+
+    # если оператор, но сервис не выбран
+    if role == "operator" and not service_id:
+        db.close()
+        return "Ошибка: оператор должен быть привязан к сервису", 400
+
+    new_user = User(
+        login=login,
+        password_hash=generate_password_hash(password),
+        role=role,
+        service_id=int(service_id) if service_id else None,
+    )
+    db.add(new_user)
+    db.commit()
+    db.close()
+    return redirect(url_for("users_list"))  
+
+@app.route("/users/edit/<int:user_id>", methods=["POST"])
+def edit_user(user_id):
+    if session.get("role") != "admin":
+        return redirect(url_for("index"))
+
+    db = SessionLocal()
+    user = db.query(User).get(user_id)
+
+    if user:
+        user.role = request.form["role"]
+        service_id = request.form.get("service_id")
+        user.service_id = int(service_id) if service_id else None
+
+        if request.form.get("password"):  # если ввели новый пароль
+            user.password_hash = generate_password_hash(request.form["password"])
+
+        db.commit()
+    db.close()
+    return redirect(url_for("users_list"))
+
+@app.route("/users/delete/<int:user_id>", methods=["POST"])
+def delete_user(user_id):
+    if session.get("role") != "admin":
+        return redirect(url_for("index"))
+
+    db = SessionLocal()
+    user = db.query(User).get(user_id)
+    if user:
+        db.delete(user)
+        db.commit()
+    db.close()
+    return redirect(url_for("users_list"))
 
 
 if __name__ == "__main__":
