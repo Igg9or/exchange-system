@@ -10,7 +10,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash
 from sqlalchemy.orm import joinedload
 from db import get_db
-from rates import get_asset_price
+from rates import price_rub_for_symbol
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_123"
@@ -365,62 +365,110 @@ def shift_report(service_id):
     return report
 
 @app.route("/add_order", methods=["POST"])
-def add_order():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
 
+def add_order():
     with get_db() as db:
         user = db.query(User).get(session["user_id"])
-        service = db.query(Service).get(user.service_id)
 
-        # Найти текущую смену
-        shift = db.query(Shift).filter(
-            Shift.service_id == service.id,
-            Shift.end_time.is_(None)
-        ).order_by(Shift.start_time.desc()).first()
+        # Определяем сервис контекста:
+        # - оператор всегда работает в своём сервисе
+        # - админ — по выбранному на странице (selected_service_id) или первому
+        if user.role == "operator":
+            service_id = user.service_id
+        else:
+            selected_service_id = request.args.get("service_id", type=int) or session.get("selected_service_id")
+            if selected_service_id:
+                service_id = selected_service_id
+            else:
+                first_service = db.query(Service).order_by(Service.id.asc()).first()
+                service_id = first_service.id if first_service else None
 
-        if not shift:
-            flash("Нет активной смены. Сначала откройте смену.")
+        if not service_id:
+            flash("Нет доступного сервиса для создания заявки.", "error")
             return redirect(url_for("index"))
 
-        # Получаем данные из формы
-        received_asset_id = int(request.form["received_asset_id"])
-        received_amount = float(request.form["received_amount"])
-        given_asset_id = int(request.form["given_asset_id"])
-        given_amount = float(request.form["given_amount"])
-        comment = request.form.get("comment", "")
+        # Достаём активную смену для сервиса, если нет — создаём
+        shift = (
+            db.query(Shift)
+            .filter(Shift.service_id == service_id, Shift.end_time.is_(None))
+            .order_by(Shift.start_time.desc())
+            .first()
+        )
+        if not shift:
+            # если смена не запущена — поднимем автоматически (можно убрать автосоздание, если нужно)
+            shift = Shift(
+                service_id=service_id,
+                number=1,
+                start_time=datetime.utcnow(),
+                started_by=user.id,
+            )
+            db.add(shift)
+            db.flush()
 
-        # Получаем актуальные курсы
-        usd_to_rub = get_usd_to_rub()
-        received_price_usdt = get_asset_price(received_asset_id)  # цена 1 ед. актива в USDT
-        given_price_usdt = get_asset_price(given_asset_id)
+        # Парсим форму
+        try:
+            received_asset_id = int(request.form["received_asset_id"])
+            given_asset_id = int(request.form["given_asset_id"])
+            received_amount = float(request.form["received_amount"])
+            given_amount = float(request.form["given_amount"])
+        except Exception:
+            flash("Проверьте корректность введённых сумм и активов.", "error")
+            return redirect(url_for("index"))
 
-        # Считаем значения в рублях
-        received_value_rub = received_amount * received_price_usdt * usd_to_rub
-        given_value_rub = given_amount * given_price_usdt * usd_to_rub
+        comment = request.form.get("comment", "").strip()
 
-        profit_rub = received_value_rub - given_value_rub
-        profit_percent = (profit_rub / given_value_rub * 100) if given_value_rub > 0 else 0
+        # Получаем цены в рублях для обоих активов на момент создания
+        recv_rub = price_rub_for_asset_id(db, received_asset_id)
+        give_rub = price_rub_for_asset_id(db, given_asset_id)
+        if recv_rub is None or give_rub is None:
+            flash("Не удалось получить курс(ы) для расчёта прибыли.", "error")
+            return redirect(url_for("index"))
 
-        # Создаём новую заявку
+        # Считаем прибыль:
+        # value_in  = сколько рублей «зашло» по цене получаемого актива
+        # value_out = сколько рублей «вышло» по цене отдаваемого актива
+        value_in = received_amount * recv_rub
+        value_out = given_amount * give_rub
+        profit_rub = value_in - value_out
+        base = value_out if value_out else 0.0
+        profit_percent = (profit_rub / base * 100.0) if base else 0.0
+
+        # Создаём Order и сохраняем цены-снимки:
         order = Order(
-            service_id=service.id,
+            service_id=service_id,
             user_id=user.id,
             shift_id=shift.id,
             type="order",
+            is_manual=True,
             received_asset_id=received_asset_id,
             received_amount=received_amount,
             given_asset_id=given_asset_id,
             given_amount=given_amount,
             comment=comment,
+            # сохраняем "снимок" цен в рублях — так прибыль зафиксирована на момент создания заявки
+            rate_at_creation=recv_rub,    # RUB за 1 единицу получаемого актива
+            rate_at_execution=give_rub,   # RUB за 1 единицу отдаваемого актива
             profit_rub=profit_rub,
             profit_percent=profit_percent,
         )
-
         db.add(order)
-        db.commit()
 
-    flash("Заявка добавлена")
+        # Обновляем балансы сервиса:
+        # +получили -> плюс к соответствующему активу
+        inc = db.query(Balance).filter_by(service_id=service_id, asset_id=received_asset_id).first()
+        if not inc:
+            inc = Balance(service_id=service_id, asset_id=received_asset_id, amount=0.0)
+            db.add(inc)
+        inc.amount += received_amount
+
+        # -отдали -> минус к соответствующему активу
+        dec = db.query(Balance).filter_by(service_id=service_id, asset_id=given_asset_id).first()
+        if not dec:
+            dec = Balance(service_id=service_id, asset_id=given_asset_id, amount=0.0)
+            db.add(dec)
+        dec.amount -= given_amount
+
+        db.commit()
     return redirect(url_for("index"))
 
 @app.route("/login", methods=["GET", "POST"])
@@ -766,6 +814,12 @@ def set_shift():
         session[f"current_shift_{user.service_id}"] = new_shift.id
 
     return redirect(url_for("index"))
+
+def price_rub_for_asset_id(db, asset_id: int) -> float | None:
+    asset = db.query(Asset).get(asset_id)
+    if not asset:
+        return None
+    return price_rub_for_symbol(asset.symbol)
 
 
 if __name__ == "__main__":
