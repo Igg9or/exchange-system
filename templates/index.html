@@ -51,18 +51,25 @@
   </div>
 
   <!-- Панель смен -->
-<div class="bg-white p-4 rounded shadow flex flex-col gap-3 mb-4">
-  <div class="flex justify-between items-center">
-    <div>
-      {% if current_shift %}
-        <p><b>Активная смена:</b> {{ current_shift.number }}</p>
-        <p><b>Запустил:</b> {{ current_shift.user.login if current_shift.user else '-' }}</p>
-        <p><b>Время начала:</b> {{ current_shift.start_time }}</p>
-      {% else %}
-        <p>Нет активной смены</p>
-      {% endif %}
-    </div>
+<div class="flex justify-between items-center">
+  <div>
+    {% if current_shift %}
+      <p><b>Активная смена:</b> {{ current_shift.number }}</p>
+      <p><b>Запустил:</b> {{ current_shift.user.login if current_shift.user else '-' }}</p>
+      <p><b>Время начала:</b> {{ current_shift.start_time }}</p>
+    {% else %}
+      <p>Нет активной смены</p>
+    {% endif %}
   </div>
+
+  <!-- 🔥 Блок статистики прибыли -->
+  <div class="text-right">
+    {% if current_shift %}
+      <p class="font-semibold text-green-600">Прибыль текущей смены: {{ "%.2f"|format(current_profit) }} ₽</p>
+      <p class="text-gray-600 text-sm">Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽</p>
+    {% endif %}
+  </div>
+</div>
 
   <!-- Кнопки переключения смен -->
   <div class="flex gap-6">

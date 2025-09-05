@@ -319,10 +319,28 @@ def index():
 
         # активная смена
         current_shift = None
+        current_profit = 0.0
+        prev_profit = 0.0
         if service:
             shift_key = f"current_shift_{service.id}"
             shift_id = session.get(shift_key)
             current_shift = db.query(Shift).get(shift_id) if shift_id else None
+
+            if current_shift:
+                # считаем прибыль текущей смены
+                orders_in_shift = db.query(Order).filter(Order.shift_id == current_shift.id).all()
+                current_profit = sum(o.profit_rub or 0 for o in orders_in_shift)
+
+                # ищем предыдущую смену этого сервиса
+                prev_shift = (
+                    db.query(Shift)
+                    .filter(Shift.service_id == service.id, Shift.id != current_shift.id)
+                    .order_by(Shift.start_time.desc())
+                    .first()
+                )
+                if prev_shift:
+                    prev_orders = db.query(Order).filter(Order.shift_id == prev_shift.id).all()
+                    prev_profit = sum(o.profit_rub or 0 for o in prev_orders)
 
         return render_template(
             "index.html",
@@ -334,6 +352,8 @@ def index():
             assets=assets,
             all_users=all_users,
             current_shift=current_shift,
+            current_profit=current_profit,
+            prev_profit=prev_profit,
         )
 
 
