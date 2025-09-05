@@ -53,7 +53,7 @@ class Order(Base):
     service_id = Column(Integer, ForeignKey("services.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     shift_id = Column(Integer, ForeignKey("shifts.id"))
-    type = Column(String)  # "order" | "internal_transfer" | "admin_action"
+    type = Column(String)  # "order" | "internal_transfer" | "admin_action" | "admin_io"
     is_manual = Column(Boolean, default=True)
 
     received_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
@@ -67,6 +67,7 @@ class Order(Base):
     profit_percent = Column(Float, nullable=True)
     profit_rub = Column(Float, default=0)
     user = relationship("User")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class BalanceHistory(Base):

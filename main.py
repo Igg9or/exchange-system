@@ -271,7 +271,7 @@ def index():
     with get_db() as db:
         user = db.query(User).get(session["user_id"])
 
-        # выбор сервиса (для админа — можно переключать, для оператора — свой)
+        # выбор сервиса (для админа — можно переключать, для оператора — всегда свой)
         selected_service_id = request.args.get("service_id", type=int)
         if user.role == "operator":
             service = db.query(Service).get(user.service_id)
@@ -303,9 +303,19 @@ def index():
         if request.args.get("comment"):
             query = query.filter(Order.comment.ilike(f"%{request.args['comment']}%"))
 
-        orders = query.order_by(Order.id.desc()).all()
+        # --- ✅ пагинация ---
+        page = request.args.get("page", 1, type=int)
+        per_page = 15
+        total_orders = query.count()
+        orders = (
+            query.order_by(Order.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+        total_pages = (total_orders + per_page - 1) // per_page
 
-        # остальное (балансы, смены и т.д.)
+        # остальное (балансы)
         balances = db.query(Balance, Asset).join(Asset, Balance.asset_id == Asset.id)
         if user.role == "operator":
             balances = balances.filter(Balance.service_id == service.id)
@@ -317,21 +327,24 @@ def index():
         all_users = db.query(User).all() if user.role == "admin" else [user]
         assets = db.query(Asset).all()
 
-        # активная смена
+        # --- ✅ активная смена из базы, а не из session ---
         current_shift = None
         current_profit = 0.0
         prev_profit = 0.0
         if service:
-            shift_key = f"current_shift_{service.id}"
-            shift_id = session.get(shift_key)
-            current_shift = db.query(Shift).get(shift_id) if shift_id else None
+            current_shift = (
+                db.query(Shift)
+                .filter(Shift.service_id == service.id, Shift.end_time.is_(None))
+                .order_by(Shift.start_time.desc())
+                .first()
+            )
 
             if current_shift:
-                # считаем прибыль текущей смены
+                # прибыль текущей смены
                 orders_in_shift = db.query(Order).filter(Order.shift_id == current_shift.id).all()
                 current_profit = sum(o.profit_rub or 0 for o in orders_in_shift)
 
-                # ищем предыдущую смену этого сервиса
+                # предыдущая смена (если есть)
                 prev_shift = (
                     db.query(Shift)
                     .filter(Shift.service_id == service.id, Shift.id != current_shift.id)
@@ -354,8 +367,9 @@ def index():
             current_shift=current_shift,
             current_profit=current_profit,
             prev_profit=prev_profit,
+            page=page,
+            total_pages=total_pages,
         )
-
 
 
 @app.route("/shift/start/<int:service_id>")
@@ -840,6 +854,65 @@ def price_rub_for_asset_id(db, asset_id: int) -> float | None:
     if not asset:
         return None
     return price_rub_for_symbol(asset.symbol)
+
+@app.route("/admin_io", methods=["POST"])
+def admin_io():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+
+        # ✅ Разрешаем и админам, и операторам
+        if user.role not in ["admin", "operator"]:
+            flash("Нет прав", "error")
+            return redirect(url_for("index"))
+
+        service_id = int(request.form["service_id"])
+        asset_id = int(request.form["asset_id"])
+        direction = request.form["direction"]  # "in" или "out"
+        amount = float(request.form["amount"])
+        comment = request.form.get("comment", "")
+
+        # 🔹 Баланс
+        balance = (
+            db.query(Balance)
+            .filter(Balance.service_id == service_id, Balance.asset_id == asset_id)
+            .first()
+        )
+        if not balance:
+            balance = Balance(service_id=service_id, asset_id=asset_id, amount=0.0)
+            db.add(balance)
+            db.flush()
+
+        # 🔹 Вносим / выводим
+        if direction == "in":
+            balance.amount += amount
+        elif direction == "out":
+            if balance.amount < amount:
+                flash("Недостаточно средств для вывода", "error")
+                return redirect(url_for("index", service_id=service_id))
+            balance.amount -= amount
+
+        # 🔹 Фиксируем как ордер
+        order = Order(
+            service_id=service_id,
+            user_id=user.id,
+            shift_id=None,  # не относится к смене
+            type="admin_io",
+            received_asset_id=asset_id if direction == "in" else None,
+            received_amount=amount if direction == "in" else 0,
+            given_asset_id=asset_id if direction == "out" else None,
+            given_amount=amount if direction == "out" else 0,
+            profit_percent=0,
+            profit_rub=0,
+            comment=f"[{direction}] {comment}",
+        )
+        db.add(order)
+        db.commit()
+
+    return redirect(url_for("index", service_id=service_id))
+
 
 
 if __name__ == "__main__":

@@ -1,263 +1,383 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <title>Crypto Dashboard</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 text-gray-900">
+  <!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Crypto Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 text-gray-900">
 
-<header class="bg-white shadow p-4 mb-4 flex justify-between items-center">
-  <div>
-    <span class="font-semibold">Привет, {{ user.login }}</span>
-    <span class="text-gray-500 text-sm"> ({{ user.role }})</span>
-  </div>
-  <div class="flex items-center gap-3">
+  <header class="bg-white shadow p-4 mb-4 flex justify-between items-center">
+    <div>
+      <span class="font-semibold">Привет, {{ user.login }}</span>
+      <span class="text-gray-500 text-sm"> ({{ user.role }})</span>
+    </div>
+    <div class="flex items-center gap-3">
     {% if user.role == "admin" %}
       <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
       <form method="get" class="inline">
-    <select name="service_id" onchange="this.form.submit()" class="border px-2 py-1 rounded">
-      <option value="">Все сервисы</option>
-      {% for s in services %}
-        <option value="{{ s.id }}" {% if selected_service_id == s.id %}selected{% endif %}>
-          {{ s.name }}
-        </option>
-      {% endfor %}
-    </select>
-  </form>
+        <select name="service_id" onchange="this.form.submit()" class="border px-2 py-1 rounded">
+          <option value="">Все сервисы</option>
+          {% for s in services %}
+            <option value="{{ s.id }}" {% if selected_service_id == s.id %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
     {% endif %}
+
+    <!-- ✅ Кнопка доступна и админу, и оператору -->
+    <button type="button"
+            onclick="document.getElementById('adminIOModal').classList.remove('hidden')"
+            class="bg-purple-600 text-white px-3 py-1 rounded">💰 Внести/Вывести</button>
+            <button type="button"
+        onclick="document.getElementById('addAssetModal').classList.remove('hidden')"
+        class="bg-indigo-600 text-white px-3 py-1 rounded">
+  ➕ Добавить актив
+</button>
+
     <a href="{{ url_for('logout') }}" class="bg-red-500 text-white px-3 py-1 rounded">Выйти</a>
   </div>
-</header>
+  </header>
 
-<div class="container mx-auto px-4">
+  <div class="container mx-auto px-4">
 
-  <!-- Балансы -->
-  <div class="grid grid-cols-3 md:grid-cols-5 gap-3 mb-4">
-    {% for balance, asset in balances %}
-      <div class="bg-white p-3 rounded shadow flex flex-col items-center">
-        <div class="text-2xl font-bold">
-          {% if asset.symbol == "BTC" %} ₿
-          {% elif asset.symbol == "USDT" %} 💵
-          {% elif asset.symbol == "RUB" %} ₽
-          {% else %} 🔹
-          {% endif %}
-        </div>
-        <div class="font-semibold">{{ asset.symbol }}</div>
-        <div class="text-gray-600 text-sm">{{ "%.4f"|format(balance.amount) }}</div>
-      </div>
-    {% endfor %}
-  </div>
-
-  <!-- Панель смен -->
-<div class="flex justify-between items-center">
-  <div>
-    {% if current_shift %}
-      <p><b>Активная смена:</b> {{ current_shift.number }}</p>
-      <p><b>Запустил:</b> {{ current_shift.user.login if current_shift.user else '-' }}</p>
-      <p><b>Время начала:</b> {{ current_shift.start_time }}</p>
-    {% else %}
-      <p>Нет активной смены</p>
-    {% endif %}
-  </div>
-
-  <!-- 🔥 Блок статистики прибыли -->
-  <div class="text-right">
-    {% if current_shift %}
-      <p class="font-semibold text-green-600">Прибыль текущей смены: {{ "%.2f"|format(current_profit) }} ₽</p>
-      <p class="text-gray-600 text-sm">Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽</p>
-    {% endif %}
-  </div>
-</div>
-
-  <!-- Кнопки переключения смен -->
-  <div class="flex gap-6">
-    {% for i in range(1,4) %}
-      <form action="{{ url_for('set_shift') }}" method="post"
-            onsubmit="return confirm('Закрыть текущую смену и открыть смену {{ i }}?')">
-        <input type="hidden" name="shift_number" value="{{ i }}">
-        <button type="submit"
-          class="px-3 py-1 rounded {{ 'bg-green-500 text-white' if current_shift and current_shift.number == i else 'bg-gray-200' }}">
-          Смена {{ i }}
-        </button>
-      </form>
-    {% endfor %}
-  </div>
-</div>
-
-  <!-- Фильтры -->
-  <div class="bg-white p-3 rounded shadow flex justify-between items-center mb-4">
-    <form method="get" class="flex gap-3">
-      <select name="type" class="border px-2 py-1 rounded">
-        <option value="">Все типы</option>
-        <option value="internal_transfer" {% if request.args.get('type') == 'internal_transfer' %}selected{% endif %}>Перевод</option>
-        <option value="admin_action" {% if request.args.get('type') == 'admin_action' %}selected{% endif %}>Админ</option>
-      </select>
-      <select name="asset_id" class="border px-2 py-1 rounded">
-        <option value="">Все активы</option>
-        {% for asset in assets %}
-          <option value="{{ asset.id }}" {% if request.args.get('asset_id') == asset.id|string %}selected{% endif %}>{{ asset.symbol }}</option>
-        {% endfor %}
-      </select>
-      <select name="operator_id" class="border px-2 py-1 rounded">
-        <option value="">Все операторы</option>
-        {% for u in all_users %}
-          <option value="{{ u.id }}" {% if request.args.get('operator_id') == u.id|string %}selected{% endif %}>{{ u.login }}</option>
-        {% endfor %}
-      </select>
-      <input type="text" name="comment" placeholder="Комментарий..." value="{{ request.args.get('comment','') }}"
-             class="border px-2 py-1 rounded">
-      <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Фильтровать</button>
-    </form>
-
-    <!-- Кнопка перевода между сервисами -->
-    <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
-      class="bg-green-600 text-white px-3 py-1 rounded">Перевод между сервисами</button>
-
-      {% if user.role == "operator" %}
-  <button onclick="document.getElementById('orderModal').classList.remove('hidden')"
-    class="bg-blue-600 text-white px-3 py-1 rounded">➕ Новая заявка</button>
-{% endif %}
-  </div>
-
-  <!-- Таблица заявок -->
-  <div class="bg-white p-3 rounded shadow">
-  <table class="w-full text-sm border-collapse">
-    <thead>
-      <tr class="bg-gray-100">
-        <th class="p-2 border">ID</th>
-        <th class="p-2 border">Тип</th>
-        <th class="p-2 border">Оператор</th>
-        <th class="p-2 border">Получили</th>
-        <th class="p-2 border">Отдали</th>
-        <th class="p-2 border">Комментарий</th>
-        <th class="p-2 border">Прибыль (%)</th>
-        <th class="p-2 border">Прибыль (₽)</th>  <!-- 🔥 новый столбец -->
-      </tr>
-    </thead>
-    <tbody>
-      {% for o in orders %}
-        <tr>
-          <td class="p-2 border">{{ o.id }}</td>
-          <td class="p-2 border">
-            {% if o.type == 'admin_action' %}
-              <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
-            {% elif o.type == 'internal_transfer' %}
-              <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
-            {% else %}
-              <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
+    <!-- Балансы -->
+    <div class="grid grid-cols-3 md:grid-cols-5 gap-3 mb-4">
+      {% for balance, asset in balances %}
+        <div class="bg-white p-3 rounded shadow flex flex-col items-center">
+          <div class="text-2xl font-bold">
+            {% if asset.symbol == "BTC" %} ₿
+            {% elif asset.symbol == "USDT" %} 💵
+            {% elif asset.symbol == "RUB" %} ₽
+            {% else %} 🔹
             {% endif %}
-          </td>
-          <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
-          <td class="p-2 border text-green-600">
-            {{ o.received_amount }} {{ o.received_asset.symbol if o.received_asset else '' }}
-          </td>
-          <td class="p-2 border text-red-600">
-            {{ o.given_amount }} {{ o.given_asset.symbol if o.given_asset else '' }}
-          </td>
-          <td class="p-2 border">{{ o.comment }}</td>
-          <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
-          <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td> <!-- 🔥 новое поле -->
-        </tr>
+          </div>
+          <div class="font-semibold">{{ asset.symbol }}</div>
+          <div class="text-gray-600 text-sm">{{ "%.4f"|format(balance.amount) }}</div>
+        </div>
       {% endfor %}
-    </tbody>
-  </table>
-</div>
+    </div>
 
-</div>
+    <!-- Панель смен -->
+  <div class="flex justify-between items-center">
+    <div>
+      {% if current_shift %}
+        <p><b>Активная смена:</b> {{ current_shift.number }}</p>
+        <p><b>Запустил:</b> {{ current_shift.user.login if current_shift.user else '-' }}</p>
+        <p><b>Время начала:</b> {{ current_shift.start_time }}</p>
+      {% else %}
+        <p>Нет активной смены</p>
+      {% endif %}
+    </div>
 
-<!-- Модалка перевода -->
-<div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <!-- 🔥 Блок статистики прибыли -->
+    <div class="text-right">
+      {% if current_shift %}
+        <p class="font-semibold text-green-600">Прибыль текущей смены: {{ "%.2f"|format(current_profit) }} ₽</p>
+        <p class="text-gray-600 text-sm">Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽</p>
+      {% endif %}
+    </div>
+  </div>
+
+    <!-- Кнопки переключения смен -->
+    <div class="flex gap-6">
+      {% for i in range(1,4) %}
+        <form action="{{ url_for('set_shift') }}" method="post" class="shift-form">
+          <input type="hidden" name="shift_number" value="{{ i }}">
+          <button type="button"
+            onclick="openShiftModal({{ i }}, this.form)"
+            class="px-3 py-1 rounded {{ 'bg-green-500 text-white' if current_shift and current_shift.number == i else 'bg-gray-200' }}">
+            Смена {{ i }}
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  </div>
+
+    <!-- Фильтры -->
+    <div class="bg-white p-3 rounded shadow flex justify-between items-center mb-4">
+      <form method="get" class="flex gap-3">
+        <select name="type" class="border px-2 py-1 rounded">
+          <option value="">Все типы</option>
+          <option value="internal_transfer" {% if request.args.get('type') == 'internal_transfer' %}selected{% endif %}>Перевод</option>
+          <option value="admin_action" {% if request.args.get('type') == 'admin_action' %}selected{% endif %}>Админ</option>
+        </select>
+        <select name="asset_id" class="border px-2 py-1 rounded">
+          <option value="">Все активы</option>
+          {% for asset in assets %}
+            <option value="{{ asset.id }}" {% if request.args.get('asset_id') == asset.id|string %}selected{% endif %}>{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+        <select name="operator_id" class="border px-2 py-1 rounded">
+          <option value="">Все операторы</option>
+          {% for u in all_users %}
+            <option value="{{ u.id }}" {% if request.args.get('operator_id') == u.id|string %}selected{% endif %}>{{ u.login }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="comment" placeholder="Комментарий..." value="{{ request.args.get('comment','') }}"
+              class="border px-2 py  -1 rounded">
+        <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Фильтровать</button>
+      </form>
+
+      <!-- Кнопка перевода между сервисами -->
+      <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
+        class="bg-green-600 text-white px-3 py-1 rounded">Перевод между сервисами</button>
+
+        {% if user.role == "operator" %}
+    <button onclick="document.getElementById('orderModal').classList.remove('hidden')"
+      class="bg-blue-600 text-white px-3 py-1 rounded">➕ Новая заявка</button>
+  {% endif %}
+    </div>
+
+    <!-- Таблица заявок -->
+    <div class="bg-white p-3 rounded shadow">
+    <table class="w-full text-sm border-collapse">
+      <thead>
+    <tr class="bg-gray-100">
+      <th class="p-2 border">ID</th>
+      <th class="p-2 border">Время</th> <!-- ✅ новая колонка -->
+      <th class="p-2 border">Тип</th>
+      <th class="p-2 border">Оператор</th>
+      <th class="p-2 border">Получили</th>
+      <th class="p-2 border">Отдали</th>
+      <th class="p-2 border">Комментарий</th>
+      <th class="p-2 border">Прибыль (%)</th>
+      <th class="p-2 border">Прибыль (₽)</th>
+
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in orders %}
+      <tr>
+        <td class="p-2 border">{{ o.id }}</td>
+        <td class="p-2 border">
+    {{ o.created_at.strftime("%d.%m.%Y %H:%M") if o.created_at else "-" }}
+  </td>
+        <td class="p-2 border">
+          {% if o.type == 'admin_action' %}
+            <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
+          {% elif o.type == 'internal_transfer' %}
+            <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
+          {% else %}
+            <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
+          {% endif %}
+        </td>
+        <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
+        <td class="p-2 border text-green-600">
+          {{ o.received_amount }} {{ o.received_asset.symbol if o.received_asset else '' }}
+        </td>
+        <td class="p-2 border text-red-600">
+          {{ o.given_amount }} {{ o.given_asset.symbol if o.given_asset else '' }}
+        </td>
+        <td class="p-2 border">{{ o.comment }}</td>
+        <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
+        <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+    </table>
+
+
+  </div>
+
+  {% set args = request.args.to_dict(flat=True) %}
+  {% set _ = args.pop('page', None) %}
+
+  <!-- ✅ Пагинация -->
+  <div class="pagination mt-4">
+    {% if page > 1 %}
+      <a href="{{ url_for('index', page=page-1, **args) }}" class="page-btn">« Назад</a>
+    {% endif %}
+
+    <span class="page-current">Страница {{ page }} из {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+      <a href="{{ url_for('index', page=page+1, **args) }}" class="page-btn">Вперёд »</a>
+    {% endif %}
+  </div>
+
+  </div>
+
+  <!-- Модалка перевода -->
+  <div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded shadow w-96">
+      <h2 class="text-lg font-bold mb-3">Перевод между сервисами</h2>
+      <form action="{{ url_for('internal_transfer') }}" method="post" class="space-y-3">
+        <div>
+          <label class="block text-sm">Откуда</label>
+          <select name="from_service_id" class="border w-full px-2 py-1 rounded">
+            {% for s in services %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Куда</label>
+          <select name="to_service_id" class="border w-full px-2 py-1 rounded">
+            {% for s in services %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Актив</label>
+          <select name="asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма</label>
+          <input type="number" step="0.0001" name="amount" class="border w-full px-2 py-1 rounded">
+        </div>
+        <div>
+          <label class="block text-sm">Комментарий</label>
+          <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('transferModal').classList.add('hidden')"
+                  class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+          <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Перевести</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модалка: Добавить заявку -->
+  <div id="orderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded shadow w-96">
+      <h2 class="text-lg font-bold mb-3">Новая заявка</h2>
+      <form action="{{ url_for('add_order') }}" method="post" class="space-y-3">
+        
+        <!-- Получаем -->
+        <div>
+          <label class="block text-sm">Получаем (Актив)</label>
+          <select name="received_asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма получаем</label>
+          <input type="number" step="0.0001" name="received_amount" class="border w-full px-2 py-1 rounded" required>
+        </div>
+
+        <!-- Отдаём -->
+        <div>
+          <label class="block text-sm">Отдаём (Актив)</label>
+          <select name="given_asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма отдаём</label>
+          <input type="number" step="0.0001" name="given_amount" class="border w-full px-2 py-1 rounded" required>
+        </div>
+
+        <!-- Комментарий -->
+        <div>
+          <label class="block text-sm">Комментарий</label>
+          <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        </div>
+
+        <!-- Кнопки -->
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('orderModal').classList.add('hidden')"
+                  class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+          <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Добавить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="adminIOModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded shadow w-96">
+      <h2 class="text-lg font-bold mb-3">Админ: Внести / Вывести актив</h2>
+      <form action="{{ url_for('admin_io') }}" method="post" class="space-y-3">
+        <div>
+          <label class="block text-sm">Сервис</label>
+          <select name="service_id" class="border w-full px-2 py-1 rounded">
+            {% for s in services %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Актив</label>
+          <select name="asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Направление</label>
+          <select name="direction" class="border w-full px-2 py-1 rounded">
+            <option value="in">Внести</option>
+            <option value="out">Вывести</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма</label>
+          <input type="number" step="0.0001" name="amount" required class="border w-full px-2 py-1 rounded">
+        </div>
+        <div>
+          <label class="block text-sm">Комментарий</label>
+          <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('adminIOModal').classList.add('hidden')"
+                  class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+          <button type="submit" class="bg-purple-600 text-white px-3 py-1 rounded">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<div id="shiftConfirmModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
   <div class="bg-white p-6 rounded shadow w-96">
-    <h2 class="text-lg font-bold mb-3">Перевод между сервисами</h2>
-    <form action="{{ url_for('internal_transfer') }}" method="post" class="space-y-3">
+    <h2 class="text-lg font-bold mb-3">Подтверждение смены</h2>
+    <p id="shiftModalText" class="mb-4 text-gray-700">Вы уверены?</p>
+    <div class="flex justify-end gap-2">
+      <button type="button" onclick="closeShiftModal()"
+              class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+      <button id="shiftConfirmBtn" type="button"
+              class="bg-red-600 text-white px-3 py-1 rounded">Подтвердить</button>
+    </div>
+  </div>
+</div>
+
+<div id="addAssetModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Добавить новый актив</h2>
+    <form action="{{ url_for('add_asset') }}" method="post" class="space-y-3">
       <div>
-        <label class="block text-sm">Откуда</label>
-        <select name="from_service_id" class="border w-full px-2 py-1 rounded">
+        <label class="block text-sm">Сервис</label>
+        <select name="service_id" class="border w-full px-2 py-1 rounded" required>
           {% for s in services %}
             <option value="{{ s.id }}">{{ s.name }}</option>
           {% endfor %}
         </select>
       </div>
       <div>
-        <label class="block text-sm">Куда</label>
-        <select name="to_service_id" class="border w-full px-2 py-1 rounded">
-          {% for s in services %}
-            <option value="{{ s.id }}">{{ s.name }}</option>
-          {% endfor %}
-        </select>
+        <label class="block text-sm">Символ</label>
+        <input type="text" name="symbol" class="border w-full px-2 py-1 rounded" required placeholder="Например: USDT TRC-20">
       </div>
       <div>
-        <label class="block text-sm">Актив</label>
-        <select name="asset_id" class="border w-full px-2 py-1 rounded">
-          {% for asset in assets %}
-            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm">Сумма</label>
-        <input type="number" step="0.0001" name="amount" class="border w-full px-2 py-1 rounded">
-      </div>
-      <div>
-        <label class="block text-sm">Комментарий</label>
-        <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        <label class="block text-sm">Название</label>
+        <input type="text" name="name" class="border w-full px-2 py-1 rounded" required placeholder="Например: Tether TRC-20">
       </div>
       <div class="flex justify-end gap-2">
-        <button type="button" onclick="document.getElementById('transferModal').classList.add('hidden')"
+        <button type="button" onclick="document.getElementById('addAssetModal').classList.add('hidden')"
                 class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
-        <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Перевести</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Модалка: Добавить заявку -->
-<div id="orderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-  <div class="bg-white p-6 rounded shadow w-96">
-    <h2 class="text-lg font-bold mb-3">Новая заявка</h2>
-    <form action="{{ url_for('add_order') }}" method="post" class="space-y-3">
-      
-      <!-- Получаем -->
-      <div>
-        <label class="block text-sm">Получаем (Актив)</label>
-        <select name="received_asset_id" class="border w-full px-2 py-1 rounded">
-          {% for asset in assets %}
-            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm">Сумма получаем</label>
-        <input type="number" step="0.0001" name="received_amount" class="border w-full px-2 py-1 rounded" required>
-      </div>
-
-      <!-- Отдаём -->
-      <div>
-        <label class="block text-sm">Отдаём (Актив)</label>
-        <select name="given_asset_id" class="border w-full px-2 py-1 rounded">
-          {% for asset in assets %}
-            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm">Сумма отдаём</label>
-        <input type="number" step="0.0001" name="given_amount" class="border w-full px-2 py-1 rounded" required>
-      </div>
-
-      <!-- Комментарий -->
-      <div>
-        <label class="block text-sm">Комментарий</label>
-        <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
-      </div>
-
-      <!-- Кнопки -->
-      <div class="flex justify-end gap-2">
-        <button type="button" onclick="document.getElementById('orderModal').classList.add('hidden')"
-                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
-        <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Добавить</button>
+        <button type="submit" class="bg-indigo-600 text-white px-3 py-1 rounded">Сохранить</button>
       </div>
     </form>
   </div>
@@ -265,6 +385,27 @@
 
 
 
+<script>
+let targetForm = null;
 
-</body>
-</html>
+function openShiftModal(shiftNumber, form) {
+  targetForm = form;
+  document.getElementById('shiftModalText').innerText =
+    `⚠️ Вы уверены, что хотите закрыть текущую смену и открыть смену ${shiftNumber}?`;
+  document.getElementById('shiftConfirmModal').classList.remove('hidden');
+}
+
+function closeShiftModal() {
+  document.getElementById('shiftConfirmModal').classList.add('hidden');
+  targetForm = null;
+}
+
+document.getElementById('shiftConfirmBtn').addEventListener('click', () => {
+  if (targetForm) {
+    targetForm.submit();
+  }
+});
+</script>
+
+  </body>
+  </html>
