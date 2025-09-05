@@ -65,6 +65,7 @@ class Order(Base):
     rate_at_creation = Column(JSON, nullable=True)
     rate_at_execution = Column(JSON, nullable=True)
     profit_percent = Column(Float, nullable=True)
+    profit_rub = Column(Float, default=0)
     user = relationship("User")
 
 

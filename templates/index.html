@@ -16,6 +16,16 @@
   <div class="flex items-center gap-3">
     {% if user.role == "admin" %}
       <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
+      <form method="get" class="inline">
+    <select name="service_id" onchange="this.form.submit()" class="border px-2 py-1 rounded">
+      <option value="">Все сервисы</option>
+      {% for s in services %}
+        <option value="{{ s.id }}" {% if selected_service_id == s.id %}selected{% endif %}>
+          {{ s.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </form>
     {% endif %}
     <a href="{{ url_for('logout') }}" class="bg-red-500 text-white px-3 py-1 rounded">Выйти</a>
   </div>
@@ -97,45 +107,56 @@
     <!-- Кнопка перевода между сервисами -->
     <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
       class="bg-green-600 text-white px-3 py-1 rounded">Перевод между сервисами</button>
+
+      {% if user.role == "operator" %}
+  <button onclick="document.getElementById('orderModal').classList.remove('hidden')"
+    class="bg-blue-600 text-white px-3 py-1 rounded">➕ Новая заявка</button>
+{% endif %}
   </div>
 
   <!-- Таблица заявок -->
   <div class="bg-white p-3 rounded shadow">
-    <table class="w-full text-sm border-collapse">
-      <thead>
-        <tr class="bg-gray-100">
-          <th class="p-2 border">ID</th>
-          <th class="p-2 border">Тип</th>
-          <th class="p-2 border">Оператор</th>
-          <th class="p-2 border">Получили</th>
-          <th class="p-2 border">Отдали</th>
-          <th class="p-2 border">Комментарий</th>
-          <th class="p-2 border">Прибыль (%)</th>
+  <table class="w-full text-sm border-collapse">
+    <thead>
+      <tr class="bg-gray-100">
+        <th class="p-2 border">ID</th>
+        <th class="p-2 border">Тип</th>
+        <th class="p-2 border">Оператор</th>
+        <th class="p-2 border">Получили</th>
+        <th class="p-2 border">Отдали</th>
+        <th class="p-2 border">Комментарий</th>
+        <th class="p-2 border">Прибыль (%)</th>
+        <th class="p-2 border">Прибыль (₽)</th>  <!-- 🔥 новый столбец -->
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+        <tr>
+          <td class="p-2 border">{{ o.id }}</td>
+          <td class="p-2 border">
+            {% if o.type == 'admin_action' %}
+              <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
+            {% elif o.type == 'internal_transfer' %}
+              <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
+            {% else %}
+              <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
+            {% endif %}
+          </td>
+          <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
+          <td class="p-2 border text-green-600">
+            {{ o.received_amount }} {{ o.received_asset.symbol if o.received_asset else '' }}
+          </td>
+          <td class="p-2 border text-red-600">
+            {{ o.given_amount }} {{ o.given_asset.symbol if o.given_asset else '' }}
+          </td>
+          <td class="p-2 border">{{ o.comment }}</td>
+          <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
+          <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td> <!-- 🔥 новое поле -->
         </tr>
-      </thead>
-      <tbody>
-        {% for o in orders %}
-          <tr>
-            <td class="p-2 border">{{ o.id }}</td>
-            <td class="p-2 border">
-              {% if o.type == 'admin_action' %}
-                <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
-              {% elif o.type == 'internal_transfer' %}
-                <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
-              {% else %}
-                <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
-              {% endif %}
-            </td>
-            <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
-            <td class="p-2 border text-green-600">{{ o.received_amount }}</td>
-            <td class="p-2 border text-red-600">{{ o.given_amount }}</td>
-            <td class="p-2 border">{{ o.comment }}</td>
-            <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 </div>
 
@@ -184,6 +205,59 @@
     </form>
   </div>
 </div>
+
+<!-- Модалка: Добавить заявку -->
+<div id="orderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Новая заявка</h2>
+    <form action="{{ url_for('add_order') }}" method="post" class="space-y-3">
+      
+      <!-- Получаем -->
+      <div>
+        <label class="block text-sm">Получаем (Актив)</label>
+        <select name="received_asset_id" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Сумма получаем</label>
+        <input type="number" step="0.0001" name="received_amount" class="border w-full px-2 py-1 rounded" required>
+      </div>
+
+      <!-- Отдаём -->
+      <div>
+        <label class="block text-sm">Отдаём (Актив)</label>
+        <select name="given_asset_id" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Сумма отдаём</label>
+        <input type="number" step="0.0001" name="given_amount" class="border w-full px-2 py-1 rounded" required>
+      </div>
+
+      <!-- Комментарий -->
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <!-- Кнопки -->
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('orderModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Добавить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
 
 </body>
 </html>

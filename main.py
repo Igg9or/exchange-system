@@ -10,7 +10,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash
 from sqlalchemy.orm import joinedload
 from db import get_db
-
+from rates import get_asset_price
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_123"
@@ -265,76 +265,76 @@ def get_shift_report(db: Session, service_id: int):
 
 @app.route("/")
 def index():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
     with get_db() as db:
-        user = db.query(User).get(session.get("user_id"))
-        if not user:
-            return redirect(url_for("login"))
+        user = db.query(User).get(session["user_id"])
 
-        service = db.query(Service).get(user.service_id)
-
-        # Балансы
-        balances = (
-            db.query(Balance, Asset)
-            .join(Asset, Balance.asset_id == Asset.id)
-            .filter(Balance.service_id == service.id)
-            .all()
-        )
-
-        # Активная смена для текущего сервиса
-        shift_key = f"current_shift_{service.id}"
-        shift_id = session.get(shift_key)
-
-        if shift_id:
-            current_shift = (
-                db.query(Shift)
-                .options(joinedload(Shift.user))
-                .get(shift_id)
-            )
+        # выбор сервиса (для админа — можно переключать, для оператора — свой)
+        selected_service_id = request.args.get("service_id", type=int)
+        if user.role == "operator":
+            service = db.query(Service).get(user.service_id)
         else:
-            current_shift = (
-                db.query(Shift)
-                .options(joinedload(Shift.user))
-                .filter(Shift.service_id == service.id, Shift.end_time.is_(None))
-                .order_by(Shift.start_time.desc())
-                .first()
-                or
-                db.query(Shift)
-                .options(joinedload(Shift.user))
-                .filter(Shift.service_id == service.id)
-                .order_by(Shift.start_time.desc())
-                .first()
-            )
+            service = db.query(Service).get(selected_service_id) if selected_service_id else None
 
-        # Фильтры
-        query = db.query(Order).options(joinedload(Order.user))
+        # формируем запрос заказов
+        query = db.query(Order).join(User).join(Service)
 
+        if user.role == "operator":
+            query = query.filter(Order.service_id == service.id)
+        elif service:
+            query = query.filter(Order.service_id == service.id)
+
+        # 🔹 применяем фильтры
         if request.args.get("type"):
             query = query.filter(Order.type == request.args["type"])
+
         if request.args.get("asset_id"):
-            query = query.filter(Order.asset_id == int(request.args["asset_id"]))
+            asset_id = int(request.args["asset_id"])
+            query = query.filter(
+                (Order.received_asset_id == asset_id) |
+                (Order.given_asset_id == asset_id)
+            )
+
         if request.args.get("operator_id"):
             query = query.filter(Order.user_id == int(request.args["operator_id"]))
+
         if request.args.get("comment"):
             query = query.filter(Order.comment.ilike(f"%{request.args['comment']}%"))
 
-        orders = query.order_by(Order.id.desc()).limit(50).all()
+        orders = query.order_by(Order.id.desc()).all()
 
-        # Всё нужное до закрытия сессии
-        all_users = db.query(User).all()
-        assets = db.query(Asset).all()
+        # остальное (балансы, смены и т.д.)
+        balances = db.query(Balance, Asset).join(Asset, Balance.asset_id == Asset.id)
+        if user.role == "operator":
+            balances = balances.filter(Balance.service_id == service.id)
+        elif service:
+            balances = balances.filter(Balance.service_id == service.id)
+        balances = balances.all()
+
         services = db.query(Service).all()
+        all_users = db.query(User).all() if user.role == "admin" else [user]
+        assets = db.query(Asset).all()
 
-    # ❗ тут уже db закрыт, но данные мы сохранили в переменные
-    return render_template(
-        "index.html",
-        user=user,
-        balances=balances,
-        orders=orders,
-        assets=assets,
-        services=services,
-        all_users=all_users,
-        current_shift=current_shift,
-    )
+        # активная смена
+        current_shift = None
+        if service:
+            shift_key = f"current_shift_{service.id}"
+            shift_id = session.get(shift_key)
+            current_shift = db.query(Shift).get(shift_id) if shift_id else None
+
+        return render_template(
+            "index.html",
+            user=user,
+            balances=balances,
+            services=services,
+            selected_service_id=selected_service_id,
+            orders=orders,
+            assets=assets,
+            all_users=all_users,
+            current_shift=current_shift,
+        )
 
 
 
@@ -366,41 +366,61 @@ def shift_report(service_id):
 
 @app.route("/add_order", methods=["POST"])
 def add_order():
-    db = SessionLocal()
-    user = db.query(User).get(session["user_id"])
+    if "user_id" not in session:
+        return redirect(url_for("login"))
 
-    service_id = int(request.form["service_id"])
-    received_asset_id = int(request.form["received_asset_id"])
-    received_amount = float(request.form["received_amount"])
-    given_asset_id = int(request.form["given_asset_id"])
-    given_amount = float(request.form["given_amount"])
-    comment = request.form.get("comment", "")
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        service = db.query(Service).get(user.service_id)
 
-    # 🔹 Заглушка курса: считаем прибыль
-    profit_percent = ((received_amount - given_amount) / given_amount) * 100 if given_amount > 0 else 0
+        # Найти текущую смену
+        shift = db.query(Shift).filter(
+            Shift.service_id == service.id,
+            Shift.end_time.is_(None)
+        ).order_by(Shift.start_time.desc()).first()
 
-    order = Order(
-        service_id=service_id,
-        user_id=user.id,
-        is_manual=True,
-        type="manual",
-        received_asset_id=received_asset_id,
-        received_amount=received_amount,
-        given_asset_id=given_asset_id,
-        given_amount=given_amount,
-        comment=comment,
-        profit_percent=profit_percent,
-        rate_at_execution={"stub_rate": 1},  # заглушка API
-    )
+        if not shift:
+            flash("Нет активной смены. Сначала откройте смену.")
+            return redirect(url_for("index"))
 
-    db.add(order)
+        # Получаем данные из формы
+        received_asset_id = int(request.form["received_asset_id"])
+        received_amount = float(request.form["received_amount"])
+        given_asset_id = int(request.form["given_asset_id"])
+        given_amount = float(request.form["given_amount"])
+        comment = request.form.get("comment", "")
 
-    # 🔹 обновляем балансы
-    update_balance(db, service_id, received_asset_id, received_amount)
-    update_balance(db, service_id, given_asset_id, -given_amount)
+        # Получаем актуальные курсы
+        usd_to_rub = get_usd_to_rub()
+        received_price_usdt = get_asset_price(received_asset_id)  # цена 1 ед. актива в USDT
+        given_price_usdt = get_asset_price(given_asset_id)
 
-    db.commit()
-    db.close()
+        # Считаем значения в рублях
+        received_value_rub = received_amount * received_price_usdt * usd_to_rub
+        given_value_rub = given_amount * given_price_usdt * usd_to_rub
+
+        profit_rub = received_value_rub - given_value_rub
+        profit_percent = (profit_rub / given_value_rub * 100) if given_value_rub > 0 else 0
+
+        # Создаём новую заявку
+        order = Order(
+            service_id=service.id,
+            user_id=user.id,
+            shift_id=shift.id,
+            type="order",
+            received_asset_id=received_asset_id,
+            received_amount=received_amount,
+            given_asset_id=given_asset_id,
+            given_amount=given_amount,
+            comment=comment,
+            profit_rub=profit_rub,
+            profit_percent=profit_percent,
+        )
+
+        db.add(order)
+        db.commit()
+
+    flash("Заявка добавлена")
     return redirect(url_for("index"))
 
 @app.route("/login", methods=["GET", "POST"])
