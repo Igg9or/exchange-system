@@ -45,21 +45,48 @@
   <div class="container mx-auto px-4">
 
     <!-- Балансы -->
-    <div class="grid grid-cols-3 md:grid-cols-5 gap-3 mb-4">
-      {% for balance, asset in balances %}
-        <div class="bg-white p-3 rounded shadow flex flex-col items-center">
-          <div class="text-2xl font-bold">
-            {% if asset.symbol == "BTC" %} ₿
-            {% elif asset.symbol == "USDT" %} 💵
-            {% elif asset.symbol == "RUB" %} ₽
-            {% else %} 🔹
-            {% endif %}
-          </div>
-          <div class="font-semibold">{{ asset.symbol }}</div>
-          <div class="text-gray-600 text-sm">{{ "%.4f"|format(balance.amount) }}</div>
+   <div id="balances" class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mb-4">
+  {% for balance, asset in balances %}
+    {% if asset.id in top_assets %}
+      <div class="bg-white p-2 rounded shadow flex flex-col items-center text-xs">
+        <div class="text-lg">
+          {% if asset.symbol == "BTC" %} ₿
+          {% elif "USDT" in asset.symbol %} 💵
+          {% elif asset.symbol == "RUB" %} ₽
+          {% else %} 🔹
+          {% endif %}
         </div>
-      {% endfor %}
-    </div>
+        <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
+        <div class="text-gray-600 text-[10px]">{{ "%.2f"|format(balance.amount) }}</div>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<!-- скрытые активы -->
+<div id="more-balances" class="hidden grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mb-4">
+  {% for balance, asset in balances %}
+    {% if asset.id not in top_assets %}
+      <div class="bg-white p-2 rounded shadow flex flex-col items-center text-xs">
+        <div class="text-lg">
+          {% if asset.symbol == "BTC" %} ₿
+          {% elif "USDT" in asset.symbol %} 💵
+          {% elif asset.symbol == "RUB" %} ₽
+          {% else %} 🔹
+          {% endif %}
+        </div>
+        <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
+        <div class="text-gray-600 text-[10px]">{{ "%.2f"|format(balance.amount) }}</div>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<!-- кнопка -->
+<button onclick="document.getElementById('more-balances').classList.toggle('hidden')"
+        class="bg-gray-200 px-3 py-1 rounded text-sm">
+  Развернуть / Скрыть
+</button>
 
     <!-- Панель смен -->
   <div class="flex justify-between items-center">

@@ -53,7 +53,7 @@ class Order(Base):
     service_id = Column(Integer, ForeignKey("services.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     shift_id = Column(Integer, ForeignKey("shifts.id"))
-    type = Column(String)  # "order" | "internal_transfer" | "admin_action" | "admin_io"
+    type = Column(String)  # "order" | "internal_transfer" | "admin_action" | "admin_io"class Asset(
     is_manual = Column(Boolean, default=True)
 
     received_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)

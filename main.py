@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash
 from sqlalchemy.orm import joinedload
 from db import get_db
 from rates import price_rub_for_symbol
+from sqlalchemy import func
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_123"
@@ -263,6 +264,8 @@ def get_shift_report(db: Session, service_id: int):
 
 # ===== FLASK ROUTES =====
 
+from sqlalchemy import func
+
 @app.route("/")
 def index():
     if "user_id" not in session:
@@ -315,7 +318,7 @@ def index():
         )
         total_pages = (total_orders + per_page - 1) // per_page
 
-        # остальное (балансы)
+        # --- ✅ балансы ---
         balances = db.query(Balance, Asset).join(Asset, Balance.asset_id == Asset.id)
         if user.role == "operator":
             balances = balances.filter(Balance.service_id == service.id)
@@ -327,7 +330,7 @@ def index():
         all_users = db.query(User).all() if user.role == "admin" else [user]
         assets = db.query(Asset).all()
 
-        # --- ✅ активная смена из базы, а не из session ---
+        # --- ✅ активная смена ---
         current_shift = None
         current_profit = 0.0
         prev_profit = 0.0
@@ -344,7 +347,7 @@ def index():
                 orders_in_shift = db.query(Order).filter(Order.shift_id == current_shift.id).all()
                 current_profit = sum(o.profit_rub or 0 for o in orders_in_shift)
 
-                # предыдущая смена (если есть)
+                # предыдущая смена
                 prev_shift = (
                     db.query(Shift)
                     .filter(Shift.service_id == service.id, Shift.id != current_shift.id)
@@ -354,6 +357,19 @@ def index():
                 if prev_shift:
                     prev_orders = db.query(Order).filter(Order.shift_id == prev_shift.id).all()
                     prev_profit = sum(o.profit_rub or 0 for o in prev_orders)
+
+        # --- ✅ топ-активы по количеству заявок ---
+        asset_usage = (
+            db.query(
+                Asset.id,
+                func.count(Order.id).label("usage_count")
+            )
+            .outerjoin(Order, (Order.received_asset_id == Asset.id) | (Order.given_asset_id == Asset.id))
+            .group_by(Asset.id)
+            .all()
+        )
+        asset_usage_sorted = sorted(asset_usage, key=lambda x: x.usage_count, reverse=True)
+        top_assets = [a.id for a in asset_usage_sorted[:12]]  # первые 12 активов
 
         return render_template(
             "index.html",
@@ -369,8 +385,8 @@ def index():
             prev_profit=prev_profit,
             page=page,
             total_pages=total_pages,
+            top_assets=top_assets,   # 🔹 передаём в шаблон
         )
-
 
 @app.route("/shift/start/<int:service_id>")
 def shift_start(service_id):
@@ -912,6 +928,35 @@ def admin_io():
         db.commit()
 
     return redirect(url_for("index", service_id=service_id))
+
+
+@app.route("/add_asset", methods=["POST"])
+def add_asset():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    symbol = request.form["symbol"].strip()
+    name = request.form["name"].strip()
+    service_id = int(request.form["service_id"])
+
+    with get_db() as db:
+        # ищем актив по symbol
+        asset = db.query(Asset).filter_by(symbol=symbol).first()
+        if not asset:
+            asset = Asset(symbol=symbol, name=name)
+            db.add(asset)
+            db.commit()
+            db.refresh(asset)
+
+        # проверяем, есть ли уже баланс у сервиса
+        balance = db.query(Balance).filter_by(service_id=service_id, asset_id=asset.id).first()
+        if not balance:
+            balance = Balance(service_id=service_id, asset_id=asset.id, amount=0)
+            db.add(balance)
+            db.commit()
+
+    return redirect(url_for("index", service_id=service_id))
+
 
 
 
