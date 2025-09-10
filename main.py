@@ -958,7 +958,11 @@ def add_asset():
     return redirect(url_for("index", service_id=service_id))
 
 
-
+@app.route("/initdb")
+def initdb():
+    from db import init_db
+    init_db()
+    return "✅ Таблицы успешно созданы!"
 
 if __name__ == "__main__":
     app.run(debug=True)

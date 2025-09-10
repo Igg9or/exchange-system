@@ -61,6 +61,9 @@ class Order(Base):
     given_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
     given_amount = Column(Float, default=0.0)
 
+    received_asset = relationship("Asset", foreign_keys=[received_asset_id])
+    given_asset = relationship("Asset", foreign_keys=[given_asset_id])
+
     comment = Column(String, nullable=True)
     rate_at_creation = Column(JSON, nullable=True)
     rate_at_execution = Column(JSON, nullable=True)
