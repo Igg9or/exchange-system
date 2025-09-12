@@ -44,6 +44,9 @@
 
   <div class="container mx-auto px-4">
 
+
+  
+
     <!-- Балансы -->
    <div id="balances" class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mb-4">
   {% for balance, asset in balances %}
@@ -61,6 +64,14 @@
       </div>
     {% endif %}
   {% endfor %}
+</div>
+
+<div class="flex justify-between items-center mb-2">
+  <h2 class="text-lg font-semibold">Активы</h2>
+  <button onclick="document.getElementById('editAssetsModal').classList.remove('hidden')"
+          class="bg-blue-600 text-white px-3 py-1 rounded">
+    ✏️ Редактировать
+  </button>
 </div>
 
 <!-- скрытые активы -->
@@ -411,28 +422,93 @@
 </div>
 
 
+<div id="editAssetsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+  <!-- контейнер, который можно скроллить -->
+  <div class="max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg w-[800px] p-6">
+    <h2 class="text-xl font-bold mb-4">Редактирование активов</h2>
+    <p class="text-sm text-gray-600 mb-4">Перетащите активы между колонками, чтобы настроить «Основные» и «Резервные».</p>
 
+    <div class="grid grid-cols-2 gap-6">
+      <!-- Основные -->
+      <div>
+        <h3 class="font-semibold mb-2">Основные активы</h3>
+        <ul id="mainAssets" class="min-h-[300px] border rounded p-2 bg-gray-50 space-y-2">
+          {% for balance, asset in balances if asset.id in top_assets %}
+          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between">
+            <span>{{ asset.symbol }}</span>
+            <span class="text-xs text-gray-500">{{ "%.2f"|format(balance.amount) }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Резервные -->
+      <div>
+        <h3 class="font-semibold mb-2">Резервные активы</h3>
+        <ul id="reserveAssets" class="min-h-[300px] border rounded p-2 bg-gray-50 space-y-2">
+          {% for balance, asset in balances if asset.id not in top_assets %}
+          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between">
+            <span>{{ asset.symbol }}</span>
+            <span class="text-xs text-gray-500">{{ "%.2f"|format(balance.amount) }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Кнопки -->
+    <div class="flex justify-end gap-3 mt-6">
+      <button onclick="document.getElementById('editAssetsModal').classList.add('hidden')"
+              class="px-4 py-2 rounded bg-gray-300">Отмена</button>
+      <button onclick="saveAssets()"
+              class="px-4 py-2 rounded bg-blue-600 text-white">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
-let targetForm = null;
+  // === ваш код для смен ===
+  let targetForm = null;
 
-function openShiftModal(shiftNumber, form) {
-  targetForm = form;
-  document.getElementById('shiftModalText').innerText =
-    `⚠️ Вы уверены, что хотите закрыть текущую смену и открыть смену ${shiftNumber}?`;
-  document.getElementById('shiftConfirmModal').classList.remove('hidden');
-}
-
-function closeShiftModal() {
-  document.getElementById('shiftConfirmModal').classList.add('hidden');
-  targetForm = null;
-}
-
-document.getElementById('shiftConfirmBtn').addEventListener('click', () => {
-  if (targetForm) {
-    targetForm.submit();
+  function openShiftModal(shiftNumber, form) {
+    targetForm = form;
+    document.getElementById('shiftModalText').innerText =
+      `⚠️ Вы уверены, что хотите закрыть текущую смену и открыть смену ${shiftNumber}?`;
+    document.getElementById('shiftConfirmModal').classList.remove('hidden');
   }
-});
+
+  function closeShiftModal() {
+    document.getElementById('shiftConfirmModal').classList.add('hidden');
+    targetForm = null;
+  }
+
+  document.getElementById('shiftConfirmBtn').addEventListener('click', () => {
+    if (targetForm) {
+      targetForm.submit();
+    }
+  });
+
+  // === новый код для редактирования активов ===
+  new Sortable(document.getElementById('mainAssets'), { group: 'assets', animation: 150 });
+  new Sortable(document.getElementById('reserveAssets'), { group: 'assets', animation: 150 });
+
+  function saveAssets() {
+    const mainIds = Array.from(document.querySelectorAll('#mainAssets li')).map(li => li.dataset.id);
+    fetch("{{ url_for('update_top_assets') }}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ main_assets: mainIds })
+    }).then(r => {
+      if (r.ok) {
+        location.reload();
+      } else {
+        alert("Ошибка при сохранении");
+      }
+    });
+  }
 </script>
+
 
   </body>
   </html>

@@ -358,18 +358,24 @@ def index():
                     prev_orders = db.query(Order).filter(Order.shift_id == prev_shift.id).all()
                     prev_profit = sum(o.profit_rub or 0 for o in prev_orders)
 
-        # --- ✅ топ-активы по количеству заявок ---
-        asset_usage = (
-            db.query(
-                Asset.id,
-                func.count(Order.id).label("usage_count")
+        # --- ✅ топ-активы ---
+        saved_top_assets = session.get("top_assets")
+        if saved_top_assets:
+            # если уже редактировали — берём сохранённый список
+            top_assets = saved_top_assets
+        else:
+            # иначе считаем топ по использованию
+            asset_usage = (
+                db.query(
+                    Asset.id,
+                    func.count(Order.id).label("usage_count")
+                )
+                .outerjoin(Order, (Order.received_asset_id == Asset.id) | (Order.given_asset_id == Asset.id))
+                .group_by(Asset.id)
+                .all()
             )
-            .outerjoin(Order, (Order.received_asset_id == Asset.id) | (Order.given_asset_id == Asset.id))
-            .group_by(Asset.id)
-            .all()
-        )
-        asset_usage_sorted = sorted(asset_usage, key=lambda x: x.usage_count, reverse=True)
-        top_assets = [a.id for a in asset_usage_sorted[:12]]  # первые 12 активов
+            asset_usage_sorted = sorted(asset_usage, key=lambda x: x.usage_count, reverse=True)
+            top_assets = [a.id for a in asset_usage_sorted[:12]]
 
         return render_template(
             "index.html",
@@ -385,8 +391,9 @@ def index():
             prev_profit=prev_profit,
             page=page,
             total_pages=total_pages,
-            top_assets=top_assets,   # 🔹 передаём в шаблон
+            top_assets=top_assets,   # 🔹 теперь реально учитываются изменения
         )
+
 
 @app.route("/shift/start/<int:service_id>")
 def shift_start(service_id):
@@ -524,19 +531,38 @@ def add_order():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        login = request.form["login"]
-        password = request.form["password"]
+        login = request.form.get("login", "").strip()
+        password = request.form.get("password", "")
 
-        db = SessionLocal()
-        user = db.query(User).filter(User.login == login).first()
-        db.close()
+        if not login or not password:
+            flash("Введите логин и пароль")
+            return render_template("login.html")
 
-        if user and (user.password_hash == password or check_password_hash(user.password_hash, password)):
-            session["user_id"] = user.id
-            session["role"] = user.role
-            return redirect(url_for("index"))
-        else:
-            flash("Неверный логин или пароль", "error")
+        with get_db() as db:
+            user = db.query(User).filter(User.login == login).first()
+
+        if not user:
+            flash("Пользователь не найден")
+            return render_template("login.html")
+
+        ok = False
+        if user.password_hash:
+            try:
+                ok = check_password_hash(user.password_hash, password)
+            except Exception:
+                # если в колонку попали «голые» пароли
+                ok = (user.password_hash == password)
+
+        if not ok:
+            flash("Неверный пароль")
+            return render_template("login.html")
+
+        # успех
+        session.clear()
+        session["user_id"] = user.id
+        session["role"] = user.role   # 👈 добавляем роль в сессию
+        session.permanent = True
+        return redirect(url_for("index"))
 
     return render_template("login.html")
 
@@ -963,6 +989,17 @@ def initdb():
     from db import init_db
     init_db()
     return "✅ Таблицы успешно созданы!"
+
+
+
+@app.route("/update_top_assets", methods=["POST"])
+def update_top_assets():
+    data = request.get_json()
+    main_assets = data.get("main_assets", [])
+    session["top_assets"] = [int(x) for x in main_assets]
+    return "ok", 200
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
