@@ -30,6 +30,8 @@ class Asset(Base):
     id = Column(Integer, primary_key=True)
     symbol = Column(String, unique=True)
     name = Column(String)
+    pair_symbol = Column(String, nullable=True)   # торговая пара с биржи
+    manual_rate = Column(Float, nullable=True) 
 
 
 class Balance(Base):

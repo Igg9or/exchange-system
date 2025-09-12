@@ -13,6 +13,9 @@ from db import get_db
 from rates import price_rub_for_symbol
 from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
+from rates import price_rub_for_symbol, _get_binance_price, _get_mexc_price
+
+
 
 MSK = timezone(timedelta(hours=3))  # Москва (UTC+3)
 
@@ -881,6 +884,18 @@ def price_rub_for_asset_id(db, asset_id: int) -> float | None:
     asset = db.query(Asset).get(asset_id)
     if not asset:
         return None
+
+    # 1. если зафиксированный курс
+    if asset.manual_rate is not None:
+        return asset.manual_rate
+
+    # 2. если указана торговая пара
+    if asset.pair_symbol:
+        px = _get_binance_price(asset.pair_symbol) or _get_mexc_price(asset.pair_symbol)
+        if px:
+            return float(px) * price_rub_for_symbol("USDT")
+
+    # 3. старое поведение (через symbol)
     return price_rub_for_symbol(asset.symbol)
 
 @app.route("/admin_io", methods=["POST"])
@@ -958,14 +973,29 @@ def add_asset():
     name = request.form["name"].strip()
     service_id = int(request.form["service_id"])
 
+    # новые поля из формы
+    pair_symbol = request.form.get("pair_symbol") or None
+    manual_rate = request.form.get("manual_rate")
+    manual_rate = float(manual_rate) if manual_rate else None
+
     with get_db() as db:
         # ищем актив по symbol
         asset = db.query(Asset).filter_by(symbol=symbol).first()
         if not asset:
-            asset = Asset(symbol=symbol, name=name)
+            asset = Asset(
+                symbol=symbol,
+                name=name,
+                pair_symbol=pair_symbol,
+                manual_rate=manual_rate
+            )
             db.add(asset)
             db.commit()
             db.refresh(asset)
+        else:
+            # если актив уже есть — обновим параметры
+            asset.pair_symbol = pair_symbol
+            asset.manual_rate = manual_rate
+            db.commit()
 
         # проверяем, есть ли уже баланс у сервиса
         balance = db.query(Balance).filter_by(service_id=service_id, asset_id=asset.id).first()
@@ -975,6 +1005,7 @@ def add_asset():
             db.commit()
 
     return redirect(url_for("index", service_id=service_id))
+
 
 
 @app.route("/initdb")
@@ -1097,6 +1128,18 @@ def delete_category(category_id):
 
 
 
+@app.route("/api/pairs")
+def get_pairs():
+    import requests
+    from flask import jsonify
+
+    try:
+        r = requests.get("https://api.binance.com/api/v3/exchangeInfo", timeout=5)
+        data = r.json()
+        symbols = [s["symbol"] for s in data["symbols"] if s["status"] == "TRADING"]
+        return jsonify(symbols)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

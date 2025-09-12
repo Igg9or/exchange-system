@@ -141,11 +141,7 @@
     <!-- Фильтры -->
     <div class="bg-white p-3 rounded shadow flex justify-between items-center mb-4">
       <form method="get" class="flex gap-3">
-        <select name="type" class="border px-2 py-1 rounded">
-          <option value="">Все типы</option>
-          <option value="internal_transfer" {% if request.args.get('type') == 'internal_transfer' %}selected{% endif %}>Перевод</option>
-          <option value="admin_action" {% if request.args.get('type') == 'admin_action' %}selected{% endif %}>Админ</option>
-        </select>
+    
         <select name="category_id" class="border px-2 py-1 rounded">
   <option value="">Все категории</option>
   {% for cat in categories %}
@@ -189,7 +185,6 @@
     <th class="p-2 border">ID</th>
     <th class="p-2 border">Время</th>
     <th class="p-2 border">Категория</th> <!-- 🔹 новая колонка -->
-    <th class="p-2 border">Тип</th>       <!-- 🔹 старое поле -->
     <th class="p-2 border">Оператор</th>
     <th class="p-2 border">Получили</th>
     <th class="p-2 border">Отдали</th>
@@ -208,17 +203,6 @@
       </td>
       <td class="p-2 border">
         {{ o.category.name if o.category else '-' }} <!-- 🔹 категория -->
-      </td>
-      <td class="p-2 border">
-        {% if o.type == 'admin_action' %}
-          <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
-        {% elif o.type == 'internal_transfer' %}
-          <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
-        {% elif o.type == 'admin_io' %}
-          <span class="bg-purple-200 px-2 py-0.5 rounded text-xs">Ввод/Вывод</span>
-        {% else %}
-          <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
-        {% endif %}
       </td>
       <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
       <td class="p-2 border text-green-600">
@@ -468,6 +452,19 @@
         <label class="block text-sm">Название</label>
         <input type="text" name="name" class="border w-full px-2 py-1 rounded" required placeholder="Например: Tether TRC-20">
       </div>
+      <div>
+  <label class="block text-sm">Торговая пара (API)</label>
+  <select id="pairSelect" name="pair_symbol" class="border w-full px-2 py-1 rounded">
+    <option value="">Авто (SYMBOLUSDT)</option>
+  </select>
+</div>
+
+<div>
+  <label class="block text-sm">Фиксированный курс (₽, опционально)</label>
+  <input type="number" step="0.0001" name="manual_rate"
+         class="border w-full px-2 py-1 rounded"
+         placeholder="Например: 1.0 для RUB">
+</div>
       <div class="flex justify-end gap-2">
         <button type="button" onclick="document.getElementById('addAssetModal').classList.add('hidden')"
                 class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
@@ -608,6 +605,26 @@
       }
     });
   }
+
+document.addEventListener("DOMContentLoaded", () => {
+  const select = document.getElementById("pairSelect");
+  if (!select) return;
+
+  fetch("/api/pairs")
+    .then(r => r.json())
+    .then(data => {
+      select.innerHTML = "<option value=''>Авто (SYMBOLUSDT)</option>";
+      data.slice(0, 500).forEach(symbol => {  // ограничим до 500
+        const opt = document.createElement("option");
+        opt.value = symbol;
+        opt.textContent = symbol;
+        select.appendChild(opt);
+      });
+    })
+    .catch(() => {
+      select.innerHTML = "<option value=''>Ошибка загрузки</option>";
+    });
+});
 </script>
 
 
