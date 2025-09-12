@@ -698,17 +698,15 @@ def internal_transfer():
     amount = float(request.form["amount"])
     comment = request.form.get("comment", "")
 
+    # генерим уникальную метку для связи ордеров
+    transfer_group = int(datetime.utcnow().timestamp() * 1000)
+
     # --- обновляем баланс отправителя ---
-    from_balance = (
-        db.query(Balance)
-        .filter(Balance.service_id == from_service_id, Balance.asset_id == asset_id)
-        .first()
-    )
+    from_balance = db.query(Balance).filter_by(service_id=from_service_id, asset_id=asset_id).first()
     if not from_balance:
         from_balance = Balance(service_id=from_service_id, asset_id=asset_id, amount=0)
         db.add(from_balance)
-        db.commit()
-        db.refresh(from_balance)
+        db.flush()
 
     old_from_amount = from_balance.amount
     from_balance.amount -= amount
@@ -721,16 +719,11 @@ def internal_transfer():
     ))
 
     # --- обновляем баланс получателя ---
-    to_balance = (
-        db.query(Balance)
-        .filter(Balance.service_id == to_service_id, Balance.asset_id == asset_id)
-        .first()
-    )
+    to_balance = db.query(Balance).filter_by(service_id=to_service_id, asset_id=asset_id).first()
     if not to_balance:
         to_balance = Balance(service_id=to_service_id, asset_id=asset_id, amount=0)
         db.add(to_balance)
-        db.commit()
-        db.refresh(to_balance)
+        db.flush()
 
     old_to_amount = to_balance.amount
     to_balance.amount += amount
@@ -742,24 +735,21 @@ def internal_transfer():
         change=amount,
     ))
 
-    # --- создаём заявку у отправителя ---
+    # --- создаём ордер у отправителя ---
     order_out = Order(
         service_id=from_service_id,
         user_id=user.id,
         shift_id=None,
         type="internal_transfer",
         is_manual=True,
-        received_asset_id=None,
-        received_amount=0.0,
         given_asset_id=asset_id,
         given_amount=amount,
+        transfer_group=transfer_group,
         comment=comment or f"Перевод {amount} актива в сервис {to_service_id}",
-        rate_at_execution={},
-        profit_percent=0,
     )
     db.add(order_out)
 
-    # --- создаём заявку у получателя ---
+    # --- создаём ордер у получателя ---
     order_in = Order(
         service_id=to_service_id,
         user_id=user.id,
@@ -768,17 +758,15 @@ def internal_transfer():
         is_manual=True,
         received_asset_id=asset_id,
         received_amount=amount,
-        given_asset_id=None,
-        given_amount=0.0,
+        transfer_group=transfer_group,
         comment=comment or f"Перевод {amount} актива из сервиса {from_service_id}",
-        rate_at_execution={},
-        profit_percent=0,
     )
     db.add(order_in)
 
     db.commit()
     db.close()
     return redirect(url_for("index"))
+
 
 
 @app.route("/users")
@@ -998,6 +986,68 @@ def update_top_assets():
     main_assets = data.get("main_assets", [])
     session["top_assets"] = [int(x) for x in main_assets]
     return "ok", 200
+
+
+@app.route("/orders/delete/<int:order_id>", methods=["POST"])
+def delete_order(order_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        order = db.query(Order).get(order_id)
+        if not order:
+            flash("Ордер не найден", "error")
+            return redirect(url_for("index"))
+
+        if order.is_deleted:
+            flash("Ордер уже удалён", "warning")
+            return redirect(url_for("index"))
+
+        order.is_deleted = True
+
+        if order.type == "order":
+            recv = db.query(Balance).filter_by(service_id=order.service_id, asset_id=order.received_asset_id).first()
+            give = db.query(Balance).filter_by(service_id=order.service_id, asset_id=order.given_asset_id).first()
+            if recv:
+                recv.amount -= order.received_amount
+            if give:
+                give.amount += order.given_amount
+
+        elif order.type == "internal_transfer":
+            # откатываем оба конца перевода
+            twins = db.query(Order).filter(
+                Order.type == "internal_transfer",
+                Order.transfer_group == order.transfer_group,
+                Order.is_deleted == False
+            ).all()
+
+            for twin in twins:
+                twin.is_deleted = True
+                if twin.received_asset_id:
+                    bal = db.query(Balance).filter_by(service_id=twin.service_id, asset_id=twin.received_asset_id).first()
+                    if bal:
+                        bal.amount -= twin.received_amount
+                if twin.given_asset_id:
+                    bal = db.query(Balance).filter_by(service_id=twin.service_id, asset_id=twin.given_asset_id).first()
+                    if bal:
+                        bal.amount += twin.given_amount
+
+        elif order.type in ("admin_action", "admin_io"):
+            if order.received_asset_id:
+                bal = db.query(Balance).filter_by(service_id=order.service_id, asset_id=order.received_asset_id).first()
+                if bal:
+                    bal.amount -= order.received_amount
+            if order.given_asset_id:
+                bal = db.query(Balance).filter_by(service_id=order.service_id, asset_id=order.given_asset_id).first()
+                if bal:
+                    bal.amount += order.given_amount
+
+        db.commit()
+
+    return redirect(url_for("index"))
+
+
+
 
 
 

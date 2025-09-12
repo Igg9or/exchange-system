@@ -188,34 +188,46 @@
     </tr>
   </thead>
   <tbody>
-    {% for o in orders %}
-      <tr>
-        <td class="p-2 border">{{ o.id }}</td>
-        <td class="p-2 border">
-    {{ o.created_at.strftime("%d.%m.%Y %H:%M") if o.created_at else "-" }}
-  </td>
-        <td class="p-2 border">
-          {% if o.type == 'admin_action' %}
-            <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
-          {% elif o.type == 'internal_transfer' %}
-            <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
-          {% else %}
-            <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
-          {% endif %}
-        </td>
-        <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
-        <td class="p-2 border text-green-600">
-          {{ o.received_amount }} {{ o.received_asset.symbol if o.received_asset else '' }}
-        </td>
-        <td class="p-2 border text-red-600">
-          {{ o.given_amount }} {{ o.given_asset.symbol if o.given_asset else '' }}
-        </td>
-        <td class="p-2 border">{{ o.comment }}</td>
-        <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
-        <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td>
-      </tr>
-    {% endfor %}
-  </tbody>
+  {% for o in orders %}
+    <tr class="{% if o.is_deleted %}bg-red-100 line-through{% endif %}">
+      <td class="p-2 border">{{ o.id }}</td>
+      <td class="p-2 border">
+        {{ o.created_at.strftime("%d.%m.%Y %H:%M") if o.created_at else "-" }}
+      </td>
+      <td class="p-2 border">
+        {% if o.type == 'admin_action' %}
+          <span class="bg-yellow-200 px-2 py-0.5 rounded text-xs">Админ</span>
+        {% elif o.type == 'internal_transfer' %}
+          <span class="bg-blue-200 px-2 py-0.5 rounded text-xs">Перевод</span>
+        {% elif o.type == 'admin_io' %}
+          <span class="bg-purple-200 px-2 py-0.5 rounded text-xs">Ввод/Вывод</span>
+        {% else %}
+          <span class="bg-green-200 px-2 py-0.5 rounded text-xs">Заявка</span>
+        {% endif %}
+      </td>
+      <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
+      <td class="p-2 border text-green-600">
+        {{ o.received_amount }} {{ o.received_asset.symbol if o.received_asset else '' }}
+      </td>
+      <td class="p-2 border text-red-600">
+        {{ o.given_amount }} {{ o.given_asset.symbol if o.given_asset else '' }}
+      </td>
+      <td class="p-2 border">{{ o.comment }}</td>
+      <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
+      <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td>
+      <td class="p-2 border">
+        {% if not o.is_deleted %}
+          <form action="{{ url_for('delete_order', order_id=o.id) }}" method="post" style="display:inline;">
+            <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
+          </form>
+        {% else %}
+          <span class="text-red-600 text-xs">Удалён</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+</tbody>
+
     </table>
 
 

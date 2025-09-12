@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Date
 from datetime import datetime
 from db import Base
 from sqlalchemy.orm import relationship
+from sqlalchemy import BigInteger
 
 class Service(Base):
     __tablename__ = "services"
@@ -71,6 +72,8 @@ class Order(Base):
     profit_rub = Column(Float, default=0)
     user = relationship("User")
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_deleted = Column(Boolean, default=False)
+    transfer_group = Column(BigInteger, nullable=True)
 
 
 class BalanceHistory(Base):
