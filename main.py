@@ -1,6 +1,6 @@
 from flask import Flask, render_template, redirect, url_for, request
 from db import SessionLocal, init_db
-from models import Service, Asset, Balance, Shift, Order, User, BalanceHistory
+from models import Service, Asset, Balance, Shift, Order, User, BalanceHistory, Category
 from datetime import datetime
 from sqlalchemy.orm import Session
 from collections import defaultdict
@@ -12,6 +12,10 @@ from sqlalchemy.orm import joinedload
 from db import get_db
 from rates import price_rub_for_symbol
 from sqlalchemy import func
+from datetime import datetime, timezone, timedelta
+
+MSK = timezone(timedelta(hours=3))  # Москва (UTC+3)
+
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key_123"
@@ -91,10 +95,10 @@ def start_shift(db: Session, service_id: int, user_id: int):
         Shift.end_time == None
     ).all()
     for s in active_shifts:
-        s.end_time = datetime.utcnow()
+        s.end_time = datetime.now(MSK)
 
     # Создаём новую смену
-    shift = Shift(service_id=service_id, started_by=user_id, start_time=datetime.utcnow())
+    shift = Shift(service_id=service_id, started_by=user_id, start_time=datetime.now(MSK))
     db.add(shift)
     db.commit()
     db.refresh(shift)
@@ -108,7 +112,7 @@ def end_shift(db: Session, service_id: int):
     ).first()
     if not shift:
         return None
-    shift.end_time = datetime.utcnow()
+    shift.end_time = datetime.now(MSK)
     db.commit()
     return shift
 
@@ -306,6 +310,10 @@ def index():
         if request.args.get("comment"):
             query = query.filter(Order.comment.ilike(f"%{request.args['comment']}%"))
 
+        # 🔹 фильтр по категории
+        if request.args.get("category_id"):
+            query = query.filter(Order.category_id == int(request.args["category_id"]))
+
         # --- ✅ пагинация ---
         page = request.args.get("page", 1, type=int)
         per_page = 15
@@ -329,6 +337,7 @@ def index():
         services = db.query(Service).all()
         all_users = db.query(User).all() if user.role == "admin" else [user]
         assets = db.query(Asset).all()
+        categories = db.query(Category).all()   # 🔹 загружаем категории
 
         # --- ✅ активная смена ---
         current_shift = None
@@ -386,13 +395,15 @@ def index():
             orders=orders,
             assets=assets,
             all_users=all_users,
+            categories=categories,      # 🔹 передаём в шаблон
             current_shift=current_shift,
             current_profit=current_profit,
             prev_profit=prev_profit,
             page=page,
             total_pages=total_pages,
-            top_assets=top_assets,   # 🔹 теперь реально учитываются изменения
+            top_assets=top_assets,
         )
+
 
 
 @app.route("/shift/start/<int:service_id>")
@@ -423,13 +434,11 @@ def shift_report(service_id):
 
 @app.route("/add_order", methods=["POST"])
 
+@app.route("/add_order", methods=["POST"])
 def add_order():
     with get_db() as db:
         user = db.query(User).get(session["user_id"])
 
-        # Определяем сервис контекста:
-        # - оператор всегда работает в своём сервисе
-        # - админ — по выбранному на странице (selected_service_id) или первому
         if user.role == "operator":
             service_id = user.service_id
         else:
@@ -444,7 +453,6 @@ def add_order():
             flash("Нет доступного сервиса для создания заявки.", "error")
             return redirect(url_for("index"))
 
-        # Достаём активную смену для сервиса, если нет — создаём
         shift = (
             db.query(Shift)
             .filter(Shift.service_id == service_id, Shift.end_time.is_(None))
@@ -452,17 +460,15 @@ def add_order():
             .first()
         )
         if not shift:
-            # если смена не запущена — поднимем автоматически (можно убрать автосоздание, если нужно)
             shift = Shift(
                 service_id=service_id,
                 number=1,
-                start_time=datetime.utcnow(),
+                start_time=datetime.now(MSK),
                 started_by=user.id,
             )
             db.add(shift)
             db.flush()
 
-        # Парсим форму
         try:
             received_asset_id = int(request.form["received_asset_id"])
             given_asset_id = int(request.form["given_asset_id"])
@@ -473,24 +479,20 @@ def add_order():
             return redirect(url_for("index"))
 
         comment = request.form.get("comment", "").strip()
+        category_id = request.form.get("category_id")
 
-        # Получаем цены в рублях для обоих активов на момент создания
         recv_rub = price_rub_for_asset_id(db, received_asset_id)
         give_rub = price_rub_for_asset_id(db, given_asset_id)
         if recv_rub is None or give_rub is None:
             flash("Не удалось получить курс(ы) для расчёта прибыли.", "error")
             return redirect(url_for("index"))
 
-        # Считаем прибыль:
-        # value_in  = сколько рублей «зашло» по цене получаемого актива
-        # value_out = сколько рублей «вышло» по цене отдаваемого актива
         value_in = received_amount * recv_rub
         value_out = given_amount * give_rub
         profit_rub = value_in - value_out
         base = value_out if value_out else 0.0
         profit_percent = (profit_rub / base * 100.0) if base else 0.0
 
-        # Создаём Order и сохраняем цены-снимки:
         order = Order(
             service_id=service_id,
             user_id=user.id,
@@ -502,23 +504,20 @@ def add_order():
             given_asset_id=given_asset_id,
             given_amount=given_amount,
             comment=comment,
-            # сохраняем "снимок" цен в рублях — так прибыль зафиксирована на момент создания заявки
-            rate_at_creation=recv_rub,    # RUB за 1 единицу получаемого актива
-            rate_at_execution=give_rub,   # RUB за 1 единицу отдаваемого актива
+            category_id=int(category_id) if category_id else None,   # ✅ сохраняем категорию
+            rate_at_creation=recv_rub,
+            rate_at_execution=give_rub,
             profit_rub=profit_rub,
             profit_percent=profit_percent,
         )
         db.add(order)
 
-        # Обновляем балансы сервиса:
-        # +получили -> плюс к соответствующему активу
         inc = db.query(Balance).filter_by(service_id=service_id, asset_id=received_asset_id).first()
         if not inc:
             inc = Balance(service_id=service_id, asset_id=received_asset_id, amount=0.0)
             db.add(inc)
         inc.amount += received_amount
 
-        # -отдали -> минус к соответствующему активу
         dec = db.query(Balance).filter_by(service_id=service_id, asset_id=given_asset_id).first()
         if not dec:
             dec = Balance(service_id=service_id, asset_id=given_asset_id, amount=0.0)
@@ -697,11 +696,10 @@ def internal_transfer():
     asset_id = int(request.form["asset_id"])
     amount = float(request.form["amount"])
     comment = request.form.get("comment", "")
+    category_id = request.form.get("category_id")
 
-    # генерим уникальную метку для связи ордеров
-    transfer_group = int(datetime.utcnow().timestamp() * 1000)
+    transfer_group = int(datetime.now(MSK).timestamp() * 1000)
 
-    # --- обновляем баланс отправителя ---
     from_balance = db.query(Balance).filter_by(service_id=from_service_id, asset_id=asset_id).first()
     if not from_balance:
         from_balance = Balance(service_id=from_service_id, asset_id=asset_id, amount=0)
@@ -718,7 +716,6 @@ def internal_transfer():
         change=-amount,
     ))
 
-    # --- обновляем баланс получателя ---
     to_balance = db.query(Balance).filter_by(service_id=to_service_id, asset_id=asset_id).first()
     if not to_balance:
         to_balance = Balance(service_id=to_service_id, asset_id=asset_id, amount=0)
@@ -735,7 +732,6 @@ def internal_transfer():
         change=amount,
     ))
 
-    # --- создаём ордер у отправителя ---
     order_out = Order(
         service_id=from_service_id,
         user_id=user.id,
@@ -746,10 +742,10 @@ def internal_transfer():
         given_amount=amount,
         transfer_group=transfer_group,
         comment=comment or f"Перевод {amount} актива в сервис {to_service_id}",
+        category_id=int(category_id) if category_id else None   # ✅ категория
     )
     db.add(order_out)
 
-    # --- создаём ордер у получателя ---
     order_in = Order(
         service_id=to_service_id,
         user_id=user.id,
@@ -760,12 +756,14 @@ def internal_transfer():
         received_amount=amount,
         transfer_group=transfer_group,
         comment=comment or f"Перевод {amount} актива из сервиса {from_service_id}",
+        category_id=int(category_id) if category_id else None   # ✅ категория
     )
     db.add(order_in)
 
     db.commit()
     db.close()
     return redirect(url_for("index"))
+
 
 
 
@@ -861,13 +859,13 @@ def set_shift():
             .first()
         )
         if last_shift:
-            last_shift.end_time = datetime.utcnow()
+            last_shift.end_time = datetime.now(MSK)
 
         # создаём новую смену с правильным service_id и номером
         new_shift = Shift(
             number=requested_number,
             service_id=user.service_id,
-            start_time=datetime.utcnow(),
+            start_time=datetime.now(MSK),
             started_by=user.id,
         )
         db.add(new_shift)
@@ -892,56 +890,63 @@ def admin_io():
 
     with get_db() as db:
         user = db.query(User).get(session["user_id"])
-
-        # ✅ Разрешаем и админам, и операторам
         if user.role not in ["admin", "operator"]:
             flash("Нет прав", "error")
             return redirect(url_for("index"))
 
         service_id = int(request.form["service_id"])
         asset_id = int(request.form["asset_id"])
-        direction = request.form["direction"]  # "in" или "out"
+        direction = request.form["direction"]  # "in" | "out"
         amount = float(request.form["amount"])
         comment = request.form.get("comment", "")
+        category_id = request.form.get("category_id")
 
-        # 🔹 Баланс
-        balance = (
-            db.query(Balance)
-            .filter(Balance.service_id == service_id, Balance.asset_id == asset_id)
-            .first()
-        )
+        # баланс
+        balance = db.query(Balance).filter_by(service_id=service_id, asset_id=asset_id).first()
         if not balance:
             balance = Balance(service_id=service_id, asset_id=asset_id, amount=0.0)
             db.add(balance)
             db.flush()
 
-        # 🔹 Вносим / выводим
+        old_amount = balance.amount
         if direction == "in":
             balance.amount += amount
         elif direction == "out":
             if balance.amount < amount:
-                flash("Недостаточно средств для вывода", "error")
+                flash("Недостаточно средств", "error")
                 return redirect(url_for("index", service_id=service_id))
             balance.amount -= amount
 
-        # 🔹 Фиксируем как ордер
+        # история изменения баланса
+        db.add(BalanceHistory(
+            service_id=service_id,
+            asset_id=asset_id,
+            old_amount=old_amount,
+            new_amount=balance.amount,
+            change=(amount if direction == "in" else -amount),
+        ))
+
+        # ордер
         order = Order(
             service_id=service_id,
             user_id=user.id,
-            shift_id=None,  # не относится к смене
-            type="admin_io",
+            shift_id=None,
+            type="admin_io",   # 👈 вернули старый тип
+            is_manual=True,
             received_asset_id=asset_id if direction == "in" else None,
             received_amount=amount if direction == "in" else 0,
             given_asset_id=asset_id if direction == "out" else None,
             given_amount=amount if direction == "out" else 0,
+            comment=comment,
             profit_percent=0,
             profit_rub=0,
-            comment=f"[{direction}] {comment}",
+            category_id=int(category_id) if category_id else None,
         )
         db.add(order)
         db.commit()
 
     return redirect(url_for("index", service_id=service_id))
+
 
 
 @app.route("/add_asset", methods=["POST"])
@@ -1046,6 +1051,49 @@ def delete_order(order_id):
 
     return redirect(url_for("index"))
 
+
+
+@app.route("/categories")
+def categories_list():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        if user.role != "admin":
+            flash("Доступ запрещён", "error")
+            return redirect(url_for("index"))
+
+        categories = db.query(Category).all()
+        return render_template("categories.html", categories=categories)
+
+
+@app.route("/categories/add", methods=["POST"])
+def add_category():
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        if user.role != "admin":
+            return {"error": "forbidden"}, 403
+
+        name = request.form.get("name")
+        if name:
+            cat = Category(name=name)
+            db.add(cat)
+            db.commit()
+        return redirect(url_for("index"))
+
+
+@app.route("/categories/delete/<int:category_id>", methods=["POST"])
+def delete_category(category_id):
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        if user.role != "admin":
+            return {"error": "forbidden"}, 403
+
+        cat = db.query(Category).get(category_id)
+        if cat:
+            db.delete(cat)
+            db.commit()
+        return redirect(url_for("index"))
 
 
 

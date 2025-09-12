@@ -16,6 +16,9 @@
     <div class="flex items-center gap-3">
     {% if user.role == "admin" %}
       <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
+      <a href="javascript:void(0)" onclick="document.getElementById('categoriesModal').classList.remove('hidden')"
+   class="bg-indigo-500 text-white px-3 py-1 rounded">📂 Категории</a>
+
       <form method="get" class="inline">
         <select name="service_id" onchange="this.form.submit()" class="border px-2 py-1 rounded">
           <option value="">Все сервисы</option>
@@ -143,6 +146,14 @@
           <option value="internal_transfer" {% if request.args.get('type') == 'internal_transfer' %}selected{% endif %}>Перевод</option>
           <option value="admin_action" {% if request.args.get('type') == 'admin_action' %}selected{% endif %}>Админ</option>
         </select>
+        <select name="category_id" class="border px-2 py-1 rounded">
+  <option value="">Все категории</option>
+  {% for cat in categories %}
+    <option value="{{ cat.id }}" {% if request.args.get('category_id') == cat.id|string %}selected{% endif %}>
+      {{ cat.name }}
+    </option>
+  {% endfor %}
+</select>
         <select name="asset_id" class="border px-2 py-1 rounded">
           <option value="">Все активы</option>
           {% for asset in assets %}
@@ -166,7 +177,7 @@
 
         {% if user.role == "operator" %}
     <button onclick="document.getElementById('orderModal').classList.remove('hidden')"
-      class="bg-blue-600 text-white px-3 py-1 rounded">➕ Новая заявка</button>
+      class="bg-blue-600 text-white px-3 py-1 rounded">➕ Добавить обмен</button>
   {% endif %}
     </div>
 
@@ -174,25 +185,29 @@
     <div class="bg-white p-3 rounded shadow">
     <table class="w-full text-sm border-collapse">
       <thead>
-    <tr class="bg-gray-100">
-      <th class="p-2 border">ID</th>
-      <th class="p-2 border">Время</th> <!-- ✅ новая колонка -->
-      <th class="p-2 border">Тип</th>
-      <th class="p-2 border">Оператор</th>
-      <th class="p-2 border">Получили</th>
-      <th class="p-2 border">Отдали</th>
-      <th class="p-2 border">Комментарий</th>
-      <th class="p-2 border">Прибыль (%)</th>
-      <th class="p-2 border">Прибыль (₽)</th>
-
-    </tr>
-  </thead>
+  <tr class="bg-gray-100">
+    <th class="p-2 border">ID</th>
+    <th class="p-2 border">Время</th>
+    <th class="p-2 border">Категория</th> <!-- 🔹 новая колонка -->
+    <th class="p-2 border">Тип</th>       <!-- 🔹 старое поле -->
+    <th class="p-2 border">Оператор</th>
+    <th class="p-2 border">Получили</th>
+    <th class="p-2 border">Отдали</th>
+    <th class="p-2 border">Комментарий</th>
+    <th class="p-2 border">Прибыль (%)</th>
+    <th class="p-2 border">Прибыль (₽)</th>
+    <th class="p-2 border">Действия</th>
+  </tr>
+</thead>
   <tbody>
   {% for o in orders %}
     <tr class="{% if o.is_deleted %}bg-red-100 line-through{% endif %}">
       <td class="p-2 border">{{ o.id }}</td>
       <td class="p-2 border">
         {{ o.created_at.strftime("%d.%m.%Y %H:%M") if o.created_at else "-" }}
+      </td>
+      <td class="p-2 border">
+        {{ o.category.name if o.category else '-' }} <!-- 🔹 категория -->
       </td>
       <td class="p-2 border">
         {% if o.type == 'admin_action' %}
@@ -227,7 +242,6 @@
     </tr>
   {% endfor %}
 </tbody>
-
     </table>
 
 
@@ -288,6 +302,15 @@
           <label class="block text-sm">Комментарий</label>
           <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
         </div>
+        <div>
+        <label class="block text-sm">Категория</label>
+        <select name="category_id" class="border w-full px-2 py-1 rounded">
+          <option value="">Без категории</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
         <div class="flex justify-end gap-2">
           <button type="button" onclick="document.getElementById('transferModal').classList.add('hidden')"
                   class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
@@ -337,6 +360,16 @@
           <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
         </div>
 
+        <div>
+          <label class="block text-sm">Категория</label>
+          <select name="category_id" class="border w-full px-2 py-1 rounded">
+            <option value="">Без категории</option>
+            {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         <!-- Кнопки -->
         <div class="flex justify-end gap-2">
           <button type="button" onclick="document.getElementById('orderModal').classList.add('hidden')"
@@ -381,6 +414,17 @@
         <div>
           <label class="block text-sm">Комментарий</label>
           <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        </div>
+        
+        <!-- 🔹 Новое поле Категория -->
+        <div>
+          <label class="block text-sm">Категория</label>
+          <select name="category_id" class="border w-full px-2 py-1 rounded">
+            <option value="">Без категории</option>
+            {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div class="flex justify-end gap-2">
           <button type="button" onclick="document.getElementById('adminIOModal').classList.add('hidden')"
@@ -477,6 +521,51 @@
     </div>
   </div>
 </div>
+
+
+<div id="categoriesModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-[500px]">
+    <h2 class="text-lg font-bold mb-3">Категории обменов</h2>
+
+    <!-- форма добавления -->
+    <form action="{{ url_for('add_category') }}" method="post" class="flex gap-2 mb-4">
+      <input type="text" name="name" placeholder="Новая категория"
+             class="border px-2 py-1 rounded w-full" required>
+      <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Добавить</button>
+    </form>
+
+    <!-- таблица категорий -->
+    <table class="w-full text-sm border-collapse mb-4">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="p-2 border">ID</th>
+          <th class="p-2 border">Название</th>
+          <th class="p-2 border">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cat in categories %}
+        <tr>
+          <td class="p-2 border">{{ cat.id }}</td>
+          <td class="p-2 border">{{ cat.name }}</td>
+          <td class="p-2 border">
+            <form action="{{ url_for('delete_category', category_id=cat.id) }}" method="post" style="display:inline;">
+              <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- кнопки -->
+    <div class="flex justify-end">
+      <button type="button" onclick="document.getElementById('categoriesModal').classList.add('hidden')"
+              class="bg-gray-300 px-3 py-1 rounded">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>

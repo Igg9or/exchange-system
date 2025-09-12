@@ -3,6 +3,10 @@ from datetime import datetime
 from db import Base
 from sqlalchemy.orm import relationship
 from sqlalchemy import BigInteger
+from datetime import datetime, timezone, timedelta
+
+# часовой пояс UTC+3 (Москва)
+MSK = timezone(timedelta(hours=3))
 
 class Service(Base):
     __tablename__ = "services"
@@ -42,7 +46,7 @@ class Shift(Base):
     id = Column(Integer, primary_key=True)
     number = Column(Integer, nullable=False)  # 1, 2 или 3
     service_id = Column(Integer, ForeignKey("services.id"))
-    start_time = Column(DateTime, default=datetime.utcnow)
+    start_time = Column(DateTime, default=lambda: datetime.now(MSK))
     end_time = Column(DateTime, nullable=True)
     started_by = Column(Integer, ForeignKey("users.id"))
     user = relationship("User")
@@ -71,9 +75,11 @@ class Order(Base):
     profit_percent = Column(Float, nullable=True)
     profit_rub = Column(Float, default=0)
     user = relationship("User")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(MSK))
     is_deleted = Column(Boolean, default=False)
     transfer_group = Column(BigInteger, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    category = relationship("Category", back_populates="orders")
 
 
 class BalanceHistory(Base):
@@ -85,4 +91,11 @@ class BalanceHistory(Base):
     old_amount = Column(Float, default=0.0)
     new_amount = Column(Float, default=0.0)
     change = Column(Float, default=0.0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(MSK))
+
+class Category(Base):
+    __tablename__ = "categories"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True)
+
+    orders = relationship("Order", back_populates="category")
