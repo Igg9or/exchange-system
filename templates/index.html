@@ -119,93 +119,113 @@
   Развернуть / Скрыть
 </button>
 
-    <!-- Панель смен -->
-  <div class="flex justify-between items-center">
-    <div>
-      {% if current_shift %}
-        <p><b>Активная смена:</b> {{ current_shift.number }}</p>
+ <!-- Панель смен -->
+<div class="bg-white p-4 rounded shadow mb-6 w-full">
+  <h2 class="text-lg font-semibold mb-3">Активная смена</h2>
+
+  {% if current_shift %}
+    <div class="flex justify-between items-start text-sm">
+      <div>
+        <p><b>Смена №:</b> {{ current_shift.number }}</p>
         <p><b>Запустил:</b> {{ current_shift.user.login if current_shift.user else '-' }}</p>
-        <p><b>Время начала:</b> {{ current_shift.start_time }}</p>
-      {% else %}
-        <p>Нет активной смены</p>
-      {% endif %}
+        <p><b>Время начала:</b>
+          {{ current_shift.start_time.strftime("%d.%m.%Y %H:%M") if current_shift.start_time else '-' }}
+        </p>
+      </div>
+      <div class="text-right">
+        <p class="font-semibold text-green-600">
+          Прибыль текущей смены: {{ "%.2f"|format(current_profit) }} ₽
+        </p>
+        <p class="text-gray-600 text-sm">
+          Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽
+        </p>
+      </div>
     </div>
-
-    <!-- 🔥 Блок статистики прибыли -->
-    <div class="text-right">
-      {% if current_shift %}
-        <p class="font-semibold text-green-600">Прибыль текущей смены: {{ "%.2f"|format(current_profit) }} ₽</p>
-        <p class="text-gray-600 text-sm">Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽</p>
-      {% endif %}
-    </div>
-  </div>
-
-    <!-- Кнопки переключения смен -->
-    <div class="flex gap-6">
-      {% for i in range(1,4) %}
-        <form action="{{ url_for('set_shift') }}" method="post" class="shift-form">
-          <input type="hidden" name="shift_number" value="{{ i }}">
-          <button type="button"
-            onclick="openShiftModal({{ i }}, this.form)"
-            class="px-3 py-1 rounded {{ 'bg-green-500 text-white' if current_shift and current_shift.number == i else 'bg-gray-200' }}">
-            Смена {{ i }}
-          </button>
-        </form>
-      {% endfor %}
-    </div>
-  </div>
-
-    <!-- Фильтры -->
-    <div class="bg-white p-3 rounded shadow flex justify-between items-center mb-4">
-      <form method="get" class="flex gap-3">
-    
-        <select name="category_id" class="border px-2 py-1 rounded">
-  <option value="">Все категории</option>
-  {% for cat in categories %}
-    <option value="{{ cat.id }}" {% if request.args.get('category_id') == cat.id|string %}selected{% endif %}>
-      {{ cat.name }}
-    </option>
-  {% endfor %}
-</select>
-        <select name="asset_id" class="border px-2 py-1 rounded">
-          <option value="">Все активы</option>
-          {% for asset in assets %}
-            <option value="{{ asset.id }}" {% if request.args.get('asset_id') == asset.id|string %}selected{% endif %}>{{ asset.symbol }}</option>
-          {% endfor %}
-        </select>
-        <select name="operator_id" class="border px-2 py-1 rounded">
-          <option value="">Все операторы</option>
-          {% for u in all_users %}
-            <option value="{{ u.id }}" {% if request.args.get('operator_id') == u.id|string %}selected{% endif %}>{{ u.login }}</option>
-          {% endfor %}
-        </select>
-        <input type="text" name="comment" placeholder="Комментарий..." value="{{ request.args.get('comment','') }}"
-              class="border px-2 py  -1 rounded">
-        <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Фильтровать</button>
-      </form>
-
-      {% if current_shift %}
-  <a href="{{ url_for('index', my_shift=1, service_id=selected_service_id) }}"
-     class="bg-purple-600 text-white px-3 py-1 rounded">
-    📋 Показать заявки моей смены
-  </a>
-{% endif %}
-
-<a href="{{ url_for('index', service_id=selected_service_id) }}"
-   class="bg-gray-300 text-black px-3 py-1 rounded">
-  🔄 Все заявки
-</a>
-
-
-      <!-- Кнопка перевода между сервисами -->
-      <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
-        class="bg-green-600 text-white px-3 py-1 rounded">Перевод между сервисами</button>
-
-        {% if user.role == "operator" %}
-    <button onclick="document.getElementById('orderModal').classList.remove('hidden')"
-      class="bg-blue-600 text-white px-3 py-1 rounded">➕ Добавить обмен</button>
+  {% else %}
+    <p class="text-gray-600">Нет активной смены</p>
   {% endif %}
-    </div>
+
+  <!-- Кнопки переключения смен -->
+  <div class="flex gap-3 mt-4">
+    {% for i in range(1,4) %}
+      <form action="{{ url_for('set_shift') }}" method="post" class="shift-form">
+        <input type="hidden" name="shift_number" value="{{ i }}">
+        <button type="button"
+          onclick="openShiftModal({{ i }}, this.form)"
+          class="px-4 py-1.5 rounded 
+                 {{ 'bg-green-500 text-white' if current_shift and current_shift.number == i else 'bg-gray-200' }}">
+          Смена {{ i }}
+        </button>
+      </form>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Фильтры -->
+<div class="bg-white p-3 rounded shadow flex justify-between items-center mb-4">
+  <form method="get" class="flex gap-2 items-center text-sm">
+    <select name="category_id" class="border px-2 py-1 rounded text-sm">
+      <option value="">Все категории</option>
+      {% for cat in categories %}
+        <option value="{{ cat.id }}" {% if request.args.get('category_id') == cat.id|string %}selected{% endif %}>
+          {{ cat.name }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <select name="asset_id" class="border px-2 py-1 rounded text-sm">
+      <option value="">Все активы</option>
+      {% for asset in assets %}
+        <option value="{{ asset.id }}" {% if request.args.get('asset_id') == asset.id|string %}selected{% endif %}>
+          {{ asset.symbol }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <select name="operator_id" class="border px-2 py-1 rounded text-sm">
+      <option value="">Все операторы</option>
+      {% for u in all_users %}
+        <option value="{{ u.id }}" {% if request.args.get('operator_id') == u.id|string %}selected{% endif %}>
+          {{ u.login }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <input type="text" name="comment" placeholder="Комментарий..." 
+           value="{{ request.args.get('comment','') }}"
+           class="border px-2 py-1 rounded text-sm">
+
+    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">
+      Фильтровать
+    </button>
+  </form>
+
+  <div class="flex gap-2 items-center text-sm">
+    {% if current_shift %}
+      <a href="{{ url_for('index', my_shift=1, service_id=selected_service_id) }}"
+         class="bg-purple-600 text-white px-3 py-1 rounded text-sm">
+        📋 Моя смена
+      </a>
+    {% endif %}
+
+    <a href="{{ url_for('index', service_id=selected_service_id) }}"
+       class="bg-gray-300 text-black px-3 py-1 rounded text-sm">
+      🔄 Все
+    </a>
+
+    <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
+            class="bg-green-600 text-white px-3 py-1 rounded text-sm">
+      Перевод
+    </button>
+
+    {% if user.role == "operator" %}
+      <button onclick="document.getElementById('orderModal').classList.remove('hidden')"
+              class="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+        ➕ Обмен
+      </button>
+    {% endif %}
+  </div>
+</div>
 
     <!-- Таблица заявок -->
     <div class="bg-white p-3 rounded shadow">
