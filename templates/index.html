@@ -64,6 +64,15 @@
         </div>
         <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
         <div class="text-gray-600 text-[10px]">{{ "%.2f"|format(balance.amount) }}</div>
+
+        {% if user.role == "admin" %}
+          <button type="button"
+                  onclick="openSetBalanceModal({{ asset.id }}, '{{ asset.symbol }}', {{ balance.amount }})"
+                  class="bg-orange-500 text-white px-2 py-0.5 mt-1 rounded text-[10px]">
+            ✏️ Изменить
+          </button>
+        {% endif %}
+
       </div>
     {% endif %}
   {% endfor %}
@@ -91,6 +100,14 @@
         </div>
         <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
         <div class="text-gray-600 text-[10px]">{{ "%.2f"|format(balance.amount) }}</div>
+
+        {% if user.role == "admin" %}
+          <button type="button"
+                  onclick="openSetBalanceModal({{ asset.id }}, '{{ asset.symbol }}', {{ balance.amount }})"
+                  class="bg-orange-500 text-white px-2 py-0.5 mt-1 rounded text-[10px]">
+            ✏️ Изменить
+          </button>
+        {% endif %}
       </div>
     {% endif %}
   {% endfor %}
@@ -167,6 +184,19 @@
         <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded">Фильтровать</button>
       </form>
 
+      {% if current_shift %}
+  <a href="{{ url_for('index', my_shift=1, service_id=selected_service_id) }}"
+     class="bg-purple-600 text-white px-3 py-1 rounded">
+    📋 Показать заявки моей смены
+  </a>
+{% endif %}
+
+<a href="{{ url_for('index', service_id=selected_service_id) }}"
+   class="bg-gray-300 text-black px-3 py-1 rounded">
+  🔄 Все заявки
+</a>
+
+
       <!-- Кнопка перевода между сервисами -->
       <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
         class="bg-green-600 text-white px-3 py-1 rounded">Перевод между сервисами</button>
@@ -216,6 +246,22 @@
       <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td>
       <td class="p-2 border">
         {% if not o.is_deleted %}
+          {% if current_shift and o.shift_id == current_shift.id and o.user_id == user.id %}
+              <!-- кнопка редактирования -->
+              <button type="button"
+                      onclick="openEditOrderModal(
+                        {{ o.id }},
+                        '{{ o.comment or "" }}',
+                        {{ o.received_amount or 0 }},
+                        {{ o.given_amount or 0 }},
+                        {{ o.received_asset_id or 'null' }},
+                        {{ o.given_asset_id or 'null' }},
+                        {{ o.category_id or 'null' }}
+                      )"
+                      class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">
+                ✏️ Редактировать
+              </button>
+            {% endif %}
           <form action="{{ url_for('delete_order', order_id=o.id) }}" method="post" style="display:inline;">
             <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
           </form>
@@ -563,6 +609,102 @@
   </div>
 </div>
 
+<div id="setBalanceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Корректировка баланса</h2>
+    <form action="{{ url_for('admin_set_balance') }}" method="post" class="space-y-3">
+      <input type="hidden" name="service_id" value="{{ selected_service_id or user.service_id }}">
+      <input type="hidden" id="setBalanceAssetId" name="asset_id">
+
+      <div>
+        <label class="block text-sm">Актив</label>
+        <input type="text" id="setBalanceAssetName" disabled class="border w-full px-2 py-1 rounded bg-gray-100">
+      </div>
+
+      <div>
+        <label class="block text-sm">Новое значение</label>
+        <input type="number" step="0.0001" id="setBalanceAmount" name="amount" required class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('setBalanceModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-orange-600 text-white px-3 py-1 rounded">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div id="editOrderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Редактировать заявку</h2>
+    <form id="editOrderForm" method="post" class="space-y-3">
+      <input type="hidden" name="order_id" id="editOrderId">
+
+      <!-- Получаем -->
+      <div>
+        <label class="block text-sm">Получаем (Актив)</label>
+        <select name="received_asset_id" id="editReceivedAsset" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Сумма получаем</label>
+        <input type="number" step="0.0001" name="received_amount" id="editReceivedAmount" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <!-- Отдаём -->
+      <div>
+        <label class="block text-sm">Отдаём (Актив)</label>
+        <select name="given_asset_id" id="editGivenAsset" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Сумма отдаём</label>
+        <input type="number" step="0.0001" name="given_amount" id="editGivenAmount" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <!-- Категория -->
+      <div>
+        <label class="block text-sm">Категория</label>
+        <select name="category_id" id="editCategory" class="border w-full px-2 py-1 rounded">
+          <option value="">Без категории</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Комментарий -->
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" id="editOrderComment" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <!-- Кнопки -->
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('editOrderModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-yellow-600 text-white px-3 py-1 rounded">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
@@ -625,6 +767,35 @@ document.addEventListener("DOMContentLoaded", () => {
       select.innerHTML = "<option value=''>Ошибка загрузки</option>";
     });
 });
+
+function openSetBalanceModal(assetId, assetName, amount) {
+    document.getElementById("setBalanceAssetId").value = assetId;
+    document.getElementById("setBalanceAssetName").value = assetName;
+    document.getElementById("setBalanceAmount").value = amount;
+    document.getElementById("setBalanceModal").classList.remove("hidden");
+}
+
+function openEditOrderModal(id, comment, receivedAmount, givenAmount, receivedAssetId, givenAssetId, categoryId) {
+  document.getElementById('editOrderId').value = id;
+  document.getElementById('editOrderComment').value = comment;
+  document.getElementById('editReceivedAmount').value = receivedAmount;
+  document.getElementById('editGivenAmount').value = givenAmount;
+
+  // активы
+  document.getElementById('editReceivedAsset').value = receivedAssetId;
+  document.getElementById('editGivenAsset').value = givenAssetId;
+
+  // категория
+  if (categoryId) {
+    document.getElementById('editCategory').value = categoryId;
+  } else {
+    document.getElementById('editCategory').value = "";
+  }
+
+  // экшен
+  document.getElementById('editOrderForm').action = "/edit_order/" + id;
+  document.getElementById('editOrderModal').classList.remove('hidden');
+}
 </script>
 
 

@@ -317,31 +317,6 @@ def index():
         if request.args.get("category_id"):
             query = query.filter(Order.category_id == int(request.args["category_id"]))
 
-        # --- ✅ пагинация ---
-        page = request.args.get("page", 1, type=int)
-        per_page = 15
-        total_orders = query.count()
-        orders = (
-            query.order_by(Order.id.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-            .all()
-        )
-        total_pages = (total_orders + per_page - 1) // per_page
-
-        # --- ✅ балансы ---
-        balances = db.query(Balance, Asset).join(Asset, Balance.asset_id == Asset.id)
-        if user.role == "operator":
-            balances = balances.filter(Balance.service_id == service.id)
-        elif service:
-            balances = balances.filter(Balance.service_id == service.id)
-        balances = balances.all()
-
-        services = db.query(Service).all()
-        all_users = db.query(User).all() if user.role == "admin" else [user]
-        assets = db.query(Asset).all()
-        categories = db.query(Category).all()   # 🔹 загружаем категории
-
         # --- ✅ активная смена ---
         current_shift = None
         current_profit = 0.0
@@ -369,6 +344,35 @@ def index():
                 if prev_shift:
                     prev_orders = db.query(Order).filter(Order.shift_id == prev_shift.id).all()
                     prev_profit = sum(o.profit_rub or 0 for o in prev_orders)
+
+        # 🔹 фильтр по смене (перенесён сюда, где уже есть current_shift)
+        if request.args.get("my_shift") == "1" and current_shift:
+            query = query.filter(Order.shift_id == current_shift.id)
+
+        # --- ✅ пагинация ---
+        page = request.args.get("page", 1, type=int)
+        per_page = 15
+        total_orders = query.count()
+        orders = (
+            query.order_by(Order.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+        total_pages = (total_orders + per_page - 1) // per_page
+
+        # --- ✅ балансы ---
+        balances = db.query(Balance, Asset).join(Asset, Balance.asset_id == Asset.id)
+        if user.role == "operator":
+            balances = balances.filter(Balance.service_id == service.id)
+        elif service:
+            balances = balances.filter(Balance.service_id == service.id)
+        balances = balances.all()
+
+        services = db.query(Service).all()
+        all_users = db.query(User).all() if user.role == "admin" else [user]
+        assets = db.query(Asset).all()
+        categories = db.query(Category).all()   # 🔹 загружаем категории
 
         # --- ✅ топ-активы ---
         saved_top_assets = session.get("top_assets")
@@ -406,6 +410,7 @@ def index():
             total_pages=total_pages,
             top_assets=top_assets,
         )
+
 
 
 
@@ -1140,6 +1145,146 @@ def get_pairs():
         return jsonify(symbols)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/admin_set_balance", methods=["POST"])
+def admin_set_balance():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        if user.role != "admin":
+            flash("Нет прав", "error")
+            return redirect(url_for("index"))
+
+        service_id = int(request.form["service_id"])
+        asset_id = int(request.form["asset_id"])
+        new_amount = float(request.form["amount"])
+        comment = request.form.get("comment", "")
+
+        balance = db.query(Balance).filter_by(service_id=service_id, asset_id=asset_id).first()
+        if not balance:
+            balance = Balance(service_id=service_id, asset_id=asset_id, amount=0.0)
+            db.add(balance)
+            db.flush()
+
+        old_amount = balance.amount
+        change = new_amount - old_amount
+        balance.amount = new_amount
+
+        # история
+        db.add(BalanceHistory(
+            service_id=service_id,
+            asset_id=asset_id,
+            old_amount=old_amount,
+            new_amount=new_amount,
+            change=change,
+        ))
+
+        # ордер
+        order = Order(
+            service_id=service_id,
+            user_id=user.id,
+            type="admin_set",
+            is_manual=True,
+            comment=comment or f"Корректировка баланса {old_amount} → {new_amount}",
+            received_asset_id=asset_id if change > 0 else None,
+            received_amount=change if change > 0 else 0,
+            given_asset_id=asset_id if change < 0 else None,
+            given_amount=abs(change) if change < 0 else 0,
+            profit_percent=0,
+            profit_rub=0,
+        )
+        db.add(order)
+        db.commit()
+
+    return redirect(url_for("index", service_id=service_id))
+
+@app.route("/edit_order/<int:order_id>", methods=["POST"])
+def edit_order(order_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        order = db.query(Order).get(order_id)
+
+        if not order:
+            flash("Заявка не найдена", "error")
+            return redirect(url_for("index"))
+
+        # оператор может редактировать только свои заявки и только в своей смене
+        if user.role == "operator":
+            current_shift = (
+                db.query(Shift)
+                .filter(Shift.service_id == user.service_id, Shift.end_time.is_(None))
+                .first()
+            )
+            if not current_shift or order.shift_id != current_shift.id or order.user_id != user.id:
+                flash("⛔ Вы можете редактировать только свои заявки в текущей смене", "error")
+                return redirect(url_for("index"))
+
+        # сохраняем старые значения
+        old_received_asset = order.received_asset_id
+        old_received_amount = order.received_amount or 0
+        old_given_asset = order.given_asset_id
+        old_given_amount = order.given_amount or 0
+
+        # обновляем заявку
+        order.received_asset_id = request.form.get("received_asset_id", type=int)
+        order.received_amount = request.form.get("received_amount", type=float)
+        order.given_asset_id = request.form.get("given_asset_id", type=int)
+        order.given_amount = request.form.get("given_amount", type=float)
+        order.comment = request.form.get("comment")
+        order.category_id = request.form.get("category_id", type=int)
+
+        # --- функция обновления баланса ---
+        def update_balance(service_id, asset_id, delta, order_id=None):
+            if not asset_id or not delta:
+                return
+            balance = (
+                db.query(Balance)
+                .filter_by(service_id=service_id, asset_id=asset_id)
+                .first()
+            )
+            if not balance:
+                balance = Balance(service_id=service_id, asset_id=asset_id, amount=0)
+                db.add(balance)
+
+            old_amount = balance.amount
+            new_amount = old_amount + delta
+            balance.amount = new_amount
+
+            db.add(BalanceHistory(
+                service_id=service_id,
+                asset_id=asset_id,
+                order_id=order_id,
+                old_amount=old_amount,
+                new_amount=new_amount,
+                change=delta,
+            ))
+
+        # --- откатываем старое ---
+        if old_received_asset and old_received_amount:
+            update_balance(order.service_id, old_received_asset, -old_received_amount, order.id)
+
+        if old_given_asset and old_given_amount:
+            update_balance(order.service_id, old_given_asset, old_given_amount, order.id)
+
+        # --- применяем новое ---
+        if order.received_asset_id and order.received_amount:
+            update_balance(order.service_id, order.received_asset_id, order.received_amount, order.id)
+
+        if order.given_asset_id and order.given_amount:
+            update_balance(order.service_id, order.given_asset_id, -order.given_amount, order.id)
+
+        db.commit()
+        flash("Заявка обновлена", "success")
+
+        service_id = order.service_id
+        return redirect(url_for("index", service_id=service_id))
+
+
 
 
 if __name__ == "__main__":
