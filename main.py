@@ -1035,7 +1035,9 @@ def delete_order(order_id):
         return redirect(url_for("login"))
 
     with get_db() as db:
+        user = db.query(User).get(session["user_id"])
         order = db.query(Order).get(order_id)
+
         if not order:
             flash("Ордер не найден", "error")
             return redirect(url_for("index"))
@@ -1044,8 +1046,21 @@ def delete_order(order_id):
             flash("Ордер уже удалён", "warning")
             return redirect(url_for("index"))
 
+        # 🔒 оператор может удалять только свои заявки в текущей смене
+        if user.role == "operator":
+            current_shift = (
+                db.query(Shift)
+                .filter(Shift.service_id == user.service_id, Shift.end_time.is_(None))
+                .first()
+            )
+            if not current_shift or order.shift_id != current_shift.id or order.user_id != user.id:
+                flash("⛔ Нельзя удалить заявку из предыдущей смены", "error")
+                return redirect(url_for("index"))
+
+        # помечаем удалённой
         order.is_deleted = True
 
+        # ======= 🔄 откатываем балансы как было =======
         if order.type == "order":
             recv = db.query(Balance).filter_by(service_id=order.service_id, asset_id=order.received_asset_id).first()
             give = db.query(Balance).filter_by(service_id=order.service_id, asset_id=order.given_asset_id).first()
@@ -1055,7 +1070,6 @@ def delete_order(order_id):
                 give.amount += order.given_amount
 
         elif order.type == "internal_transfer":
-            # откатываем оба конца перевода
             twins = db.query(Order).filter(
                 Order.type == "internal_transfer",
                 Order.transfer_group == order.transfer_group,
@@ -1085,8 +1099,8 @@ def delete_order(order_id):
 
         db.commit()
 
+    flash("✅ Ордер удалён", "success")
     return redirect(url_for("index"))
-
 
 
 @app.route("/categories")
@@ -1284,6 +1298,14 @@ def edit_order(order_id):
         service_id = order.service_id
         return redirect(url_for("index", service_id=service_id))
 
+@app.template_filter('trim_float')
+def trim_float(value, precision=8):
+    if value is None:
+        return "-"
+    try:
+        return f"{value:.{precision}f}".rstrip('0').rstrip('.')
+    except Exception:
+        return str(value)
 
 
 
