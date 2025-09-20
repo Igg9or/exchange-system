@@ -4,9 +4,9 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from contextlib import contextmanager
 
 # всегда подключаемся к локальной базе
-url = "postgresql+psycopg2://postgres:1501@localhost/exchange_db"
+DATABASE_URL = "postgresql+psycopg2://exchange_user:1501@localhost:5432/exchange_db"
 
-engine = create_engine(url, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
