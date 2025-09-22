@@ -11,6 +11,8 @@ def get_usd_rub() -> float:
     except Exception:
         # простой безопасный дефолт, чтобы не падать
         return 100.0
+
+
 def _get_binance_price(symbol: str) -> float | None:
     try:
         r = requests.get(
@@ -21,6 +23,7 @@ def _get_binance_price(symbol: str) -> float | None:
         return float(r.json()["price"])
     except Exception:
         return None
+
 
 def _get_mexc_price(symbol: str) -> float | None:
     try:
@@ -86,29 +89,40 @@ ALIAS = {
     "DAI": "USDC",
 }
 
-def price_rub_for_symbol(symbol: str) -> float:
-    symbol = symbol.upper()
-    symbol = ALIAS.get(symbol, symbol)  # ✅ заменяем на базовый актив
 
-    # RUB всегда = 1
+def price_rub_for_symbol(symbol: str) -> float:
+    """Вернуть цену актива в рублях."""
+    symbol = symbol.upper()
+    symbol = ALIAS.get(symbol, symbol)  # алиасы (ANYBANK_RUB → RUB и т.д.)
+
+    # 1. RUB всегда равен 1
     if symbol == "RUB":
         return 1.0
 
-    # USD/EUR/CNY можно получать через пары к USDT
+    # 2. Доллар (USD) → Binance → MEXC → ЦБ РФ
+    # 2. Доллар всегда по ЦБ РФ
     if symbol == "USD":
-        return _get_binance_price("USDTTRY") and _get_binance_price("USDTRUB")
-    if symbol == "EUR":
-        return _get_binance_price("EURUSDT") * price_rub_for_symbol("USDT")
-    if symbol == "CNY":
-        return _get_binance_price("CNYUSDT") * price_rub_for_symbol("USDT")
+        return get_usd_rub()
 
-    # Стейблы считаем как доллар
+    # 3. Стейблы (USDT, USDC) = доллар по ЦБ
     if symbol in ("USDT", "USDC"):
         return price_rub_for_symbol("USD")
 
-    # Криптовалюты → пробуем Binance, потом MEXC
+    # 4. Евро
+    if symbol == "EUR":
+        px = _get_binance_price("EURUSDT") or _get_mexc_price("EURUSDT")
+        if px:
+            return float(px) * price_rub_for_symbol("USDT")
+
+    # 5. Юань
+    if symbol == "CNY":
+        px = _get_binance_price("CNYUSDT") or _get_mexc_price("CNYUSDT")
+        if px:
+            return float(px) * price_rub_for_symbol("USDT")
+
+    # 6. Остальные криптовалюты → <SYMBOL>USDT * курс USDT/RUB
     pair = f"{symbol}USDT"
     px = _get_binance_price(pair) or _get_mexc_price(pair)
     if not px:
         raise ValueError(f"Нет курса для {symbol}")
-    return float(px) * price_rub_for_symbol("USD")
+    return float(px) * price_rub_for_symbol("USDT")

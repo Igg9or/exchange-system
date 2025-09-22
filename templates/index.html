@@ -63,7 +63,9 @@
           {% endif %}
         </div>
         <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
-        <div class="text-gray-600 text-[10px]">{{ "%.2f"|format(balance.amount) }}</div>
+        <div class="text-gray-600 text-xs w-full text-center break-all">
+  {{ balance.amount|trim_float }}
+</div>
 
         {% if user.role == "admin" %}
           <button type="button"
@@ -99,7 +101,9 @@
           {% endif %}
         </div>
         <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
-        <div class="text-gray-600 text-[10px]">{{ "%.2f"|format(balance.amount) }}</div>
+        <div class="text-gray-600 text-xs w-full text-center break-all">
+  {{ balance.amount|trim_float }}
+</div>
 
         {% if user.role == "admin" %}
           <button type="button"
@@ -348,7 +352,7 @@
         </div>
         <div>
           <label class="block text-sm">Сумма</label>
-          <input type="number" step="0.00000001" name="amount" class="border w-full px-2 py-1 rounded">
+          <input type="number" step="any" name="amount" class="border w-full px-2 py-1 rounded">
         </div>
         <div>
           <label class="block text-sm">Комментарий</label>
@@ -389,7 +393,7 @@
         </div>
         <div>
           <label class="block text-sm">Сумма получаем</label>
-          <input type="number" step="0.0001" name="received_amount" class="border w-full px-2 py-1 rounded" required>
+          <input type="number" step="any" name="received_amount" class="border w-full px-2 py-1 rounded" required>
         </div>
 
         <!-- Отдаём -->
@@ -403,7 +407,7 @@
         </div>
         <div>
           <label class="block text-sm">Сумма отдаём</label>
-          <input type="number" step="0.00000001" name="given_amount" class="border w-full px-2 py-1 rounded" required>
+          <input type="number" step="any" name="given_amount" class="border w-full px-2 py-1 rounded" required>
         </div>
 
         <!-- Комментарий -->
@@ -461,7 +465,7 @@
         </div>
         <div>
           <label class="block text-sm">Сумма</label>
-          <input type="number" step="0.00000001" name="amount" required class="border w-full px-2 py-1 rounded">
+          <input type="number" step="any" name="amount" required class="border w-full px-2 py-1 rounded">
         </div>
         <div>
           <label class="block text-sm">Комментарий</label>
@@ -529,7 +533,7 @@
 
 <div>
   <label class="block text-sm">Фиксированный курс (₽, опционально)</label>
-  <input type="number" step="0.00000001" name="manual_rate"
+  <input type="number" step="any" name="manual_rate"
          class="border w-full px-2 py-1 rounded"
          placeholder="Например: 1.0 для RUB">
 </div>
@@ -557,7 +561,9 @@
           {% for balance, asset in balances if asset.id in top_assets %}
           <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between">
             <span>{{ asset.symbol }}</span>
-            <span class="text-xs text-gray-500">{{ "%.2f"|format(balance.amount) }}</span>
+            <div class="text-gray-600 text-xs w-full text-center break-all">
+  {{ balance.amount|trim_float }}
+</div>
           </li>
           {% endfor %}
         </ul>
@@ -570,7 +576,9 @@
           {% for balance, asset in balances if asset.id not in top_assets %}
           <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between">
             <span>{{ asset.symbol }}</span>
-            <span class="text-xs text-gray-500">{{ "%.2f"|format(balance.amount) }}</span>
+            <div class="text-gray-600 text-xs w-full text-center break-all">
+  {{ balance.amount|trim_float }}
+</div>
           </li>
           {% endfor %}
         </ul>
@@ -645,7 +653,7 @@
 
       <div>
         <label class="block text-sm">Новое значение</label>
-        <input type="number" step="0.00000001" id="setBalanceAmount" name="amount" required class="border w-full px-2 py-1 rounded">
+        <input type="number" step="any" id="setBalanceAmount" name="amount" required class="border w-full px-2 py-1 rounded">
       </div>
 
       <div>
@@ -680,7 +688,7 @@
       </div>
       <div>
         <label class="block text-sm">Сумма получаем</label>
-        <input type="number" step="0.000000001" name="received_amount" id="editReceivedAmount" class="border w-full px-2 py-1 rounded">
+        <input type="number" step="any" name="received_amount" id="editReceivedAmount" class="border w-full px-2 py-1 rounded">
       </div>
 
       <!-- Отдаём -->
@@ -694,7 +702,7 @@
       </div>
       <div>
         <label class="block text-sm">Сумма отдаём</label>
-        <input type="number" step="0.0000000001" name="given_amount" id="editGivenAmount" class="border w-full px-2 py-1 rounded">
+        <input type="number" step="any" name="given_amount" id="editGivenAmount" class="border w-full px-2 py-1 rounded">
       </div>
 
       <!-- Категория -->

@@ -331,10 +331,15 @@ def index():
 
             if current_shift:
                 # прибыль текущей смены
-                orders_in_shift = db.query(Order).filter(Order.shift_id == current_shift.id).all()
+                # прибыль текущей смены (только не удалённые заявки)
+                orders_in_shift = (
+                    db.query(Order)
+                    .filter(Order.shift_id == current_shift.id, Order.is_deleted == False)
+                    .all()
+                )
                 current_profit = sum(o.profit_rub or 0 for o in orders_in_shift)
 
-                # предыдущая смена
+                # предыдущая смена (тоже только не удалённые)
                 prev_shift = (
                     db.query(Shift)
                     .filter(Shift.service_id == service.id, Shift.id != current_shift.id)
@@ -342,7 +347,11 @@ def index():
                     .first()
                 )
                 if prev_shift:
-                    prev_orders = db.query(Order).filter(Order.shift_id == prev_shift.id).all()
+                    prev_orders = (
+                        db.query(Order)
+                        .filter(Order.shift_id == prev_shift.id, Order.is_deleted == False)
+                        .all()
+                    )
                     prev_profit = sum(o.profit_rub or 0 for o in prev_orders)
 
         # 🔹 фильтр по смене (перенесён сюда, где уже есть current_shift)

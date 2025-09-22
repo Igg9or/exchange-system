@@ -1,9 +1,10 @@
-import os
+# db.py
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from contextlib import contextmanager
 
-url = os.environ.get("DATABASE_URL", "postgresql+psycopg2://postgres:1501@localhost/exchange_db")
+# всегда подключаемся к локальной базе
+url = "postgresql+psycopg2://postgres:1501@localhost/exchange_db"
 
 engine = create_engine(url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
