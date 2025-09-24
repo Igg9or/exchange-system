@@ -1276,6 +1276,19 @@ def edit_order(order_id):
         order.comment = request.form.get("comment")
         order.category_id = request.form.get("category_id", type=int)
 
+        # --- пересчёт прибыли ---
+        recv_rub = price_rub_for_asset_id(db, order.received_asset_id)
+        give_rub = price_rub_for_asset_id(db, order.given_asset_id)
+        if recv_rub and give_rub:
+            value_in = (order.received_amount or 0) * recv_rub
+            value_out = (order.given_amount or 0) * give_rub
+            order.profit_rub = value_in - value_out
+            base = value_out if value_out else 0.0
+            order.profit_percent = (order.profit_rub / base * 100.0) if base else 0.0
+        else:
+            order.profit_rub = 0
+            order.profit_percent = 0
+
         # --- функция обновления баланса ---
         def update_balance(service_id, asset_id, delta, order_id=None):
             if not asset_id or not delta:
@@ -1321,6 +1334,7 @@ def edit_order(order_id):
 
         service_id = order.service_id
         return redirect(url_for("index", service_id=service_id))
+
 
 @app.template_filter('trim_float')
 def trim_float(value, precision=8):
