@@ -14,6 +14,7 @@ from rates import price_rub_for_symbol
 from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
 from rates import price_rub_for_symbol, _get_binance_price, _get_mexc_price
+from flask import session
 
 
 
@@ -360,7 +361,14 @@ def index():
 
         # --- ✅ пагинация ---
         page = request.args.get("page", 1, type=int)
-        per_page = 15
+
+        # если per_page передан в запросе — сохраняем в сессии
+        if "per_page" in request.args:
+            session["per_page"] = request.args.get("per_page", type=int)
+
+        # берём из сессии или дефолт
+        per_page = session.get("per_page", 15)
+        
         total_orders = query.count()
         orders = (
             query.order_by(Order.id.desc())
@@ -402,6 +410,10 @@ def index():
             asset_usage_sorted = sorted(asset_usage, key=lambda x: x.usage_count, reverse=True)
             top_assets = [a.id for a in asset_usage_sorted[:12]]
 
+        args = request.args.to_dict(flat=True)
+        args.pop("page", None)        # убираем текущую страницу
+        args.pop("per_page", None) 
+
         return render_template(
             "index.html",
             user=user,
@@ -418,6 +430,9 @@ def index():
             page=page,
             total_pages=total_pages,
             top_assets=top_assets,
+            per_page=per_page,
+            total_orders=total_orders,
+            args=args 
         )
 
 

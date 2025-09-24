@@ -303,21 +303,56 @@
 
   </div>
 
-  {% set args = request.args.to_dict(flat=True) %}
-  {% set _ = args.pop('page', None) %}
+ {% set args = request.args.to_dict(flat=True) %}
+{% set _ = args.pop('page', None) %}
+{% set _ = args.pop('per_page', None) %}
 
   <!-- ✅ Пагинация -->
-  <div class="pagination mt-4">
+  <div class="flex justify-between items-center mt-4">
+
+  <!-- 🔹 Ввод per_page -->
+  <form method="get" class="flex items-center gap-2 text-sm">
+    {% for k,v in args.items() %}
+      <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <label>Строк на страницу:</label>
+    <input type="number" name="per_page" value="{{ per_page }}" min="5" max="200"
+           class="border px-2 py-1 rounded w-20 text-sm"
+           onchange="this.form.submit()">
+  </form>
+
+  <!-- 🔹 Нумерация страниц -->
+  <div class="flex gap-1">
     {% if page > 1 %}
-      <a href="{{ url_for('index', page=page-1, **args) }}" class="page-btn">« Назад</a>
+      <a href="{{ url_for('index', page=page-1, per_page=per_page, **args) }}"
+         class="px-2 py-1 border rounded">«</a>
     {% endif %}
 
-    <span class="page-current">Страница {{ page }} из {{ total_pages }}</span>
+    {% for p in range(1, total_pages+1) %}
+      {% if p == page %}
+        <span class="px-2 py-1 border rounded bg-blue-500 text-white">{{ p }}</span>
+      {% elif p >= page-2 and p <= page+2 %}
+        <a href="{{ url_for('index', page=p, per_page=per_page, **args) }}"
+           class="px-2 py-1 border rounded">{{ p }}</a>
+      {% elif p == 1 or p == total_pages %}
+        <a href="{{ url_for('index', page=p, per_page=per_page, **args) }}"
+           class="px-2 py-1 border rounded">{{ p }}</a>
+        {% if p == 1 and page > 4 %}<span class="px-2">...</span>{% endif %}
+        {% if p == total_pages and page < total_pages-3 %}<span class="px-2">...</span>{% endif %}
+      {% endif %}
+    {% endfor %}
 
     {% if page < total_pages %}
-      <a href="{{ url_for('index', page=page+1, **args) }}" class="page-btn">Вперёд »</a>
+      <a href="{{ url_for('index', page=page+1, per_page=per_page, **args) }}"
+         class="px-2 py-1 border rounded">»</a>
     {% endif %}
   </div>
+
+  <!-- 🔹 Показано N из M -->
+  <div class="text-sm text-gray-600">
+    Показано {{ orders|length }} из {{ total_orders }}
+  </div>
+</div>
 
   </div>
 
