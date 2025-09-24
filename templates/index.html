@@ -290,7 +290,23 @@
       <form action="{{ url_for('delete_order', order_id=o.id) }}" method="post" style="display:inline;">
         <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
       </form>
+      
     {% endif %}
+
+    {# --- если это операция Внести/Вывести --- #}
+    {% if o.type == "admin_io" and o.user_id == user.id %}
+      <button type="button"
+              onclick="openEditIOmodal({{ o.id }}, '{{ o.comment or "" }}', {{ o.amount or 0 }}, {{ o.asset_id or 'null' }}, '{{ o.direction }}')"
+              class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">
+        ✏️ Редактировать
+      </button>
+
+      <form action="{{ url_for('delete_io', io_id=o.id) }}" method="post" style="display:inline;">
+        <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
+      </form>
+    {% endif %}
+
+
   {% else %}
     <span class="text-red-600 text-xs">Удалён</span>
   {% endif %}
@@ -769,6 +785,48 @@
 
 
 
+<div id="editIOModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Редактировать Внести/Вывести</h2>
+    <form id="editIOForm" method="post" class="space-y-3">
+      <input type="hidden" name="io_id" id="editIOId">
+
+      <div>
+        <label class="block text-sm">Актив</label>
+        <select name="asset_id" id="editIOAsset" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm">Сумма</label>
+        <input type="number" step="any" name="amount" id="editIOAmount" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div>
+        <label class="block text-sm">Направление</label>
+        <select name="direction" id="editIODirection" class="border w-full px-2 py-1 rounded">
+          <option value="in">Внести</option>
+          <option value="out">Вывести</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" id="editIOComment" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('editIOModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-yellow-600 text-white px-3 py-1 rounded">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
@@ -861,6 +919,20 @@ function openEditOrderModal(id, comment, receivedAmount, givenAmount, receivedAs
   document.getElementById('editOrderForm').action = "/edit_order/" + id;
   document.getElementById('editOrderModal').classList.remove('hidden');
 }
+
+
+function openEditIOmodal(id, comment, amount, assetId, direction) {
+  document.getElementById('editIOId').value = id;
+  document.getElementById('editIOComment').value = comment;
+  document.getElementById('editIOAmount').value = amount;
+  document.getElementById('editIOAsset').value = assetId;
+  document.getElementById('editIODirection').value = direction;
+
+  document.getElementById('editIOForm').action = "/edit_io/" + id;
+  document.getElementById('editIOModal').classList.remove('hidden');
+}
+
+
 </script>
 
 

@@ -368,7 +368,7 @@ def index():
 
         # берём из сессии или дефолт
         per_page = session.get("per_page", 15)
-        
+
         total_orders = query.count()
         orders = (
             query.order_by(Order.id.desc())
@@ -1330,6 +1330,82 @@ def trim_float(value, precision=8):
         return f"{value:.{precision}f}".rstrip('0').rstrip('.')
     except Exception:
         return str(value)
+
+
+
+@app.route("/edit_io/<int:io_id>", methods=["POST"])
+def edit_io(io_id):
+    with get_db() as db:
+        io = db.query(Order).get(io_id)
+        if not io or io.type != "admin_io":
+            return "Not found", 404
+
+        # --- откат старого ---
+        if io.received_asset_id:
+            bal = db.query(Balance).filter_by(service_id=io.service_id, asset_id=io.received_asset_id).first()
+            if bal:
+                bal.amount -= io.received_amount
+
+        if io.given_asset_id:
+            bal = db.query(Balance).filter_by(service_id=io.service_id, asset_id=io.given_asset_id).first()
+            if bal:
+                bal.amount += io.given_amount
+
+        # --- новые данные ---
+        new_asset_id = request.form.get("asset_id", type=int)
+        new_amount = request.form.get("amount", type=float)
+        new_direction = request.form.get("direction")
+        new_comment = request.form.get("comment")
+
+        # обновляем сам объект
+        io.received_asset_id = new_asset_id if new_direction == "in" else None
+        io.received_amount = new_amount if new_direction == "in" else 0
+        io.given_asset_id = new_asset_id if new_direction == "out" else None
+        io.given_amount = new_amount if new_direction == "out" else 0
+        io.comment = new_comment
+        io.direction = new_direction
+        io.asset_id = new_asset_id
+        io.amount = new_amount
+
+        # --- применяем новое ---
+        bal = db.query(Balance).filter_by(service_id=io.service_id, asset_id=new_asset_id).first()
+        if not bal:
+            bal = Balance(service_id=io.service_id, asset_id=new_asset_id, amount=0)
+            db.add(bal)
+
+        if new_direction == "in":
+            bal.amount += new_amount
+        else:
+            bal.amount -= new_amount
+
+        db.commit()
+    return redirect(url_for("index"))
+
+
+
+
+@app.route("/delete_io/<int:io_id>", methods=["POST"])
+@app.route("/delete_io/<int:io_id>", methods=["POST"])
+def delete_io(io_id):
+    with get_db() as db:
+        io = db.query(Order).get(io_id)
+        if not io or io.type != "admin_io":
+            return "Not found", 404
+
+        # 🔄 откат операции
+        if io.received_asset_id:
+            bal = db.query(Balance).filter_by(service_id=io.service_id, asset_id=io.received_asset_id).first()
+            if bal:
+                bal.amount -= io.received_amount
+
+        if io.given_asset_id:
+            bal = db.query(Balance).filter_by(service_id=io.service_id, asset_id=io.given_asset_id).first()
+            if bal:
+                bal.amount += io.given_amount
+
+        io.is_deleted = True
+        db.commit()
+    return redirect(url_for("index"))   
 
 
 
