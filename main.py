@@ -956,9 +956,6 @@ def admin_io():
         if direction == "in":
             balance.amount += amount
         elif direction == "out":
-            if balance.amount < amount:
-                flash("Недостаточно средств", "error")
-                return redirect(url_for("index", service_id=service_id))
             balance.amount -= amount
 
         # история изменения баланса
@@ -985,6 +982,9 @@ def admin_io():
             profit_percent=0,
             profit_rub=0,
             category_id=int(category_id) if category_id else None,
+            direction=direction,
+            asset_id=asset_id,
+            amount=amount,
         )
         db.add(order)
         db.commit()
@@ -1195,10 +1195,14 @@ def admin_set_balance():
             flash("Нет прав", "error")
             return redirect(url_for("index"))
 
-        service_id = int(request.form["service_id"])
-        asset_id = int(request.form["asset_id"])
-        new_amount = float(request.form["amount"])
+        service_id = request.form.get("service_id", type=int)
+        asset_id = request.form.get("asset_id", type=int)
+        new_amount = request.form.get("amount", type=float)
         comment = request.form.get("comment", "")
+
+        if not service_id or not asset_id:
+            flash("Ошибка: не выбран сервис или актив", "error")
+            return redirect(url_for("index"))
 
         balance = db.query(Balance).filter_by(service_id=service_id, asset_id=asset_id).first()
         if not balance:
@@ -1210,7 +1214,6 @@ def admin_set_balance():
         change = new_amount - old_amount
         balance.amount = new_amount
 
-        # история
         db.add(BalanceHistory(
             service_id=service_id,
             asset_id=asset_id,
@@ -1219,13 +1222,12 @@ def admin_set_balance():
             change=change,
         ))
 
-        # ордер
         order = Order(
             service_id=service_id,
             user_id=user.id,
             type="admin_set",
             is_manual=True,
-            comment=comment or f"Корректировка баланса {old_amount} → {new_amount}",
+            comment=comment or f"Корректировка {old_amount} → {new_amount}",
             received_asset_id=asset_id if change > 0 else None,
             received_amount=change if change > 0 else 0,
             given_asset_id=asset_id if change < 0 else None,
