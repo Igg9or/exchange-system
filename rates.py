@@ -89,6 +89,101 @@ ALIAS = {
     "DAI": "USDC",
 }
 
+# Иконки для активов (маленькие PNG/SVG)
+ICON_MAP = {
+    # Криптовалюты
+    "BTC": "/static/icons/btc.png",
+    "ETH": "/static/icons/eth.png",
+    "USDT": "https://cryptocurrencyliveprices.com/img/usdt.png",
+    "USDC": "https://cryptocurrencyliveprices.com/img/usdc.png",
+    "DAI": "https://cryptocurrencyliveprices.com/img/dai.png",
+    "BNB": "https://cryptocurrencyliveprices.com/img/bnb.png",
+    "TRX": "https://cryptocurrencyliveprices.com/img/trx.png",
+
+    # Валюты
+    "RUB": "https://flagcdn.com/w20/ru.png",
+    "USD": "https://flagcdn.com/w20/us.png",
+    "EUR": "https://flagcdn.com/w20/eu.png",
+    "CNY": "https://flagcdn.com/w20/cn.png",
+
+    # Банки
+    "SBER_RUB": "/static/icons/sber.png",
+    "TINKOFF_RUB": "/static/icons/tinkoff.png",
+    "VTB_RUB": "/static/icons/vtb.png",
+    "ALFA_RUB": "/static/icons/alfa.png",
+    "GAZPROM_RUB": "/static/icons/gazprom.png",
+    "RAIFFEISEN_RUB": "/static/icons/raiffeisen.png",
+    "PSB_RUB": "/static/icons/psb.png",
+    "RNKB_RUB": "/static/icons/rnkb.png",
+    "MIR_RUB": "/static/icons/mir.png",
+    "VISA_MC_RUB": "/static/icons/visa_mc.png",
+
+    # Платёжки
+    "PAYEER_RUB": "/static/icons/payeer.png",
+    "PAYEER_USD": "/static/icons/payeer.png",
+    "CAPITALIST_RUB": "/static/icons/capitalist.png",
+    "CAPITALIST_USD": "/static/icons/capitalist.png",
+    "VOLET_RUB": "/static/icons/volet.png",
+    "VOLET_USD": "/static/icons/volet.png",
+    "VOLET_EUR": "/static/icons/volet.png",
+    "MONEYGO_USD": "/static/icons/moneygo.png",
+
+    # Китайские платёжки
+    "ALIPAY_CNY": "/static/icons/alipay.png",
+    "WECHAT_CNY": "/static/icons/wechat.png",
+}
+
+NAME_MAP = {
+    # Крипта
+    "BTC": "Bitcoin",
+    "ETH": "Ethereum",
+    "USDT": "Tether",
+    "USDC": "USD Coin",
+    "DAI": "Dai",
+    "BNB": "Binance Coin",
+    "TRX": "TRON",
+
+    # Валюты
+    "RUB": "Российский рубль",
+    "USD": "Доллар США",
+    "EUR": "Евро",
+    "CNY": "Юань",
+
+    # Банки
+    "SBER_RUB": "Сбербанк",
+    "TINKOFF_RUB": "Тинькофф",
+    "VTB_RUB": "ВТБ",
+    "ALFA_RUB": "Альфа-Банк",
+    "MIR_RUB": "Карта «Мир»",
+    "VISA_MC_RUB": "Visa / MasterCard",
+    "ANYBANK_RUB": "Любой банк",
+    "ALLBANKS_RUB": "Все банки",
+    "OZON_RUB": "Ozon",
+    "SBP_RUB": "СБП",
+    "HOME_RUB": "Home Credit",
+    "GAZPROM_RUB": "Газпромбанк",
+    "RAIFFEISEN_RUB": "Райффайзенбанк",
+    "PSB_RUB": "ПСБ",
+    "RNKB_RUB": "РНКБ",
+    "CASH_RUB": "Наличные рубли",
+
+    # Платежки
+    "PAYEER_RUB": "Payeer (₽)",
+    "PAYEER_USD": "Payeer ($)",
+    "CAPITALIST_RUB": "Capitalist (₽)",
+    "CAPITALIST_USD": "Capitalist ($)",
+    "VOLET_RUB": "Volet (₽)",
+    "VOLET_USD": "Volet ($)",
+    "VOLET_EUR": "Volet (€)",
+    "MONEYGO_USD": "MoneyGO ($)",
+
+    # Китай
+    "ALIPAY_CNY": "Alipay",
+    "WECHAT_CNY": "WeChat Pay",
+}
+
+
+
 
 def price_rub_for_symbol(symbol: str) -> float:
     """Вернуть цену актива в рублях."""

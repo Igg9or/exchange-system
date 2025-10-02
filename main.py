@@ -15,6 +15,8 @@ from sqlalchemy import func
 from datetime import datetime, timezone, timedelta
 from rates import price_rub_for_symbol, _get_binance_price, _get_mexc_price
 from flask import session
+from rates import ICON_MAP, NAME_MAP, ALIAS
+
 
 
 
@@ -432,7 +434,10 @@ def index():
             top_assets=top_assets,
             per_page=per_page,
             total_orders=total_orders,
-            args=args 
+            args=args,
+            ICON_MAP=ICON_MAP,
+            NAME_MAP=NAME_MAP,
+            ALIAS=ALIAS
         )
 
 
@@ -1422,6 +1427,37 @@ def delete_io(io_id):
         io.is_deleted = True
         db.commit()
     return redirect(url_for("index"))   
+
+@app.route("/delete_asset/<int:asset_id>", methods=["POST"])
+def delete_asset(asset_id):
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        user = db.get(User, user_id)
+        if not user or user.role != "admin":
+            return "Forbidden", 403
+
+        asset = db.get(Asset, asset_id)
+        if asset:
+            # 1. Удаляем все балансы (жёстко через query.delete)
+            db.query(Balance).filter_by(asset_id=asset.id).delete(synchronize_session=False)
+
+            # 2. Удаляем все ордера, где актив участвовал
+            db.query(Order).filter(
+                (Order.given_asset_id == asset.id) | (Order.received_asset_id == asset.id)
+            ).delete(synchronize_session=False)
+
+            # 3. Удаляем сам актив
+            db.delete(asset)
+
+            db.commit()
+
+    return redirect(url_for("index"))
+
+
+
 
 
 

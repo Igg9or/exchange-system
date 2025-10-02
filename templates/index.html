@@ -51,34 +51,49 @@
   
 
     <!-- Балансы -->
-   <div id="balances" class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mb-4">
+<div id="balances" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 mb-4">
   {% for balance, asset in balances %}
     {% if asset.id in top_assets %}
-      <div class="bg-white p-2 rounded shadow flex flex-col items-center text-xs">
-        <div class="text-lg">
-          {% if asset.symbol == "BTC" %} ₿
-          {% elif "USDT" in asset.symbol %} 💵
-          {% elif asset.symbol == "RUB" %} ₽
-          {% else %} 🔹
-          {% endif %}
-        </div>
-        <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
-        <div class="text-gray-600 text-xs w-full text-center break-all">
-  {{ balance.amount|trim_float }}
+      <div class="p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border 
+                  transition hover:shadow-md bg-white">
+        
+        <!-- Иконка -->
+        <!-- Иконка + Название -->
+<div class="flex items-center justify-center gap-2 mb-1">
+  <div class="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-full">
+    {% if ICON_MAP.get(asset.symbol) %}
+      <img src="{{ ICON_MAP[asset.symbol] }}" alt="{{ asset.symbol }}" class="w-4 h-4">
+    {% else %}
+      <span class="text-sm">🔹</span>
+    {% endif %}
+  </div>
+  <div class="text-[12px] font-semibold text-gray-800">
+    {{ NAME_MAP.get(asset.symbol, asset.symbol) }}
+  </div>
 </div>
 
+<!-- Баланс -->
+<div class="text-base font-bold text-gray-900 tracking-tight">
+  {{ balance.amount|trim_float }} {{ ALIAS.get(asset.symbol, asset.symbol) }}
+</div>
+
+
+
+        <!-- Кнопка -->
         {% if user.role == "admin" %}
           <button type="button"
                   onclick="openSetBalanceModal({{ asset.id }}, '{{ asset.symbol }}', {{ balance.amount }})"
-                  class="bg-orange-500 text-white px-2 py-0.5 mt-1 rounded text-[10px]">
-            ✏️ Изменить
+                  class="mt-1 bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-[10px] hover:bg-gray-300">
+            ✏️
           </button>
         {% endif %}
-
       </div>
     {% endif %}
   {% endfor %}
 </div>
+
+
+
 
 <div class="flex justify-between items-center mb-2">
   <h2 class="text-lg font-semibold">Активы</h2>
@@ -610,12 +625,18 @@
         <h3 class="font-semibold mb-2">Основные активы</h3>
         <ul id="mainAssets" class="min-h-[300px] border rounded p-2 bg-gray-50 space-y-2">
           {% for balance, asset in balances if asset.id in top_assets %}
-          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between">
-            <span>{{ asset.symbol }}</span>
-            <div class="text-gray-600 text-xs w-full text-center break-all">
-  {{ balance.amount|trim_float }}
-</div>
-          </li>
+          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between items-center">
+  <span>{{ NAME_MAP.get(asset.symbol, asset.symbol) }}</span>
+  <div class="flex gap-2 items-center">
+    <div class="text-gray-600 text-xs">{{ balance.amount|trim_float }}</div>
+
+    <!-- Кнопка удалить -->
+    <form action="{{ url_for('delete_asset', asset_id=asset.id) }}" method="post"
+          onsubmit="return confirm('Удалить актив {{ NAME_MAP.get(asset.symbol, asset.symbol) }}?');">
+      <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">🗑 Удалить</button>
+    </form>
+  </div>
+</li>
           {% endfor %}
         </ul>
       </div>

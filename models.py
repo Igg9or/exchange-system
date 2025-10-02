@@ -32,6 +32,7 @@ class Asset(Base):
     name = Column(String)
     pair_symbol = Column(String, nullable=True)   # торговая пара с биржи
     manual_rate = Column(Float, nullable=True) 
+    
 
 
 class Balance(Base):
