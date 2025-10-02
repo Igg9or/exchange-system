@@ -1441,20 +1441,11 @@ def delete_asset(asset_id):
 
         asset = db.get(Asset, asset_id)
         if asset:
-            # 1. Удаляем все балансы (жёстко через query.delete)
-            db.query(Balance).filter_by(asset_id=asset.id).delete(synchronize_session=False)
-
-            # 2. Удаляем все ордера, где актив участвовал
-            db.query(Order).filter(
-                (Order.given_asset_id == asset.id) | (Order.received_asset_id == asset.id)
-            ).delete(synchronize_session=False)
-
-            # 3. Удаляем сам актив
-            db.delete(asset)
-
+            db.delete(asset)   # теперь это безопасно
             db.commit()
 
     return redirect(url_for("index"))
+
 
 
 

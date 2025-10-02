@@ -1,0 +1,26 @@
+02.10 БД
+ALTER TABLE balances
+    DROP CONSTRAINT balances_asset_id_fkey,
+    ADD CONSTRAINT balances_asset_id_fkey
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE orders
+    DROP CONSTRAINT orders_received_asset_id_fkey,
+    ADD CONSTRAINT orders_received_asset_id_fkey
+    FOREIGN KEY (received_asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE orders
+    DROP CONSTRAINT orders_given_asset_id_fkey,
+    ADD CONSTRAINT orders_given_asset_id_fkey
+    FOREIGN KEY (given_asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE orders
+    DROP CONSTRAINT orders_asset_id_fkey,
+    ADD CONSTRAINT orders_asset_id_fkey
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE balances_history
+    DROP CONSTRAINT balances_history_asset_id_fkey,
+    ADD CONSTRAINT balances_history_asset_id_fkey
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+

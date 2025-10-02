@@ -39,7 +39,7 @@ class Balance(Base):
     __tablename__ = "balances"
     id = Column(Integer, primary_key=True)
     service_id = Column(Integer, ForeignKey("services.id"))
-    asset_id = Column(Integer, ForeignKey("assets.id"))
+    asset_id = Column(Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
     amount = Column(Float, default=0.0)
 
 
@@ -64,9 +64,9 @@ class Order(Base):
     type = Column(String)  # "order" | "internal_transfer" | "admin_action" | "admin_io"class Asset(
     is_manual = Column(Boolean, default=True)
 
-    received_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
+    received_asset_id = Column(Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
     received_amount = Column(Float, default=0.0)
-    given_asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
+    given_asset_id = Column(Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
     given_amount = Column(Float, default=0.0)
 
     received_asset = relationship("Asset", foreign_keys=[received_asset_id])
@@ -75,7 +75,7 @@ class Order(Base):
      # --- 🔹 новое для операций Внести/Вывести ---
     direction = Column(String, nullable=True)   # "in" или "out"
     amount = Column(Float, default=0.0)
-    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
+    asset_id = Column(Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)  # для admin_io
     asset = relationship("Asset", foreign_keys=[asset_id])
 
     comment = Column(String, nullable=True)
@@ -95,7 +95,7 @@ class BalanceHistory(Base):
     __tablename__ = "balances_history"
     id = Column(Integer, primary_key=True)
     service_id = Column(Integer, ForeignKey("services.id"))
-    asset_id = Column(Integer, ForeignKey("assets.id"))
+    asset_id = Column(Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=True)
     old_amount = Column(Float, default=0.0)
     new_amount = Column(Float, default=0.0)

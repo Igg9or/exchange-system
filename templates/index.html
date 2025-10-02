@@ -62,7 +62,8 @@
 <div class="flex items-center justify-center gap-2 mb-1">
   <div class="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-full">
     {% if ICON_MAP.get(asset.symbol) %}
-      <img src="{{ ICON_MAP[asset.symbol] }}" alt="{{ asset.symbol }}" class="w-4 h-4">
+      <img src="{{ ICON_MAP[asset.symbol] }}" alt="{{ asset.symbol }}" class="w-4 h-4"
+     onerror="this.outerHTML='<span class=\'text-sm\'>🔹</span>'">
     {% else %}
       <span class="text-sm">🔹</span>
     {% endif %}
@@ -631,10 +632,12 @@
     <div class="text-gray-600 text-xs">{{ balance.amount|trim_float }}</div>
 
     <!-- Кнопка удалить -->
-    <form action="{{ url_for('delete_asset', asset_id=asset.id) }}" method="post"
-          onsubmit="return confirm('Удалить актив {{ NAME_MAP.get(asset.symbol, asset.symbol) }}?');">
-      <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">🗑 Удалить</button>
-    </form>
+    {% if user.role == "admin" %}
+  <form action="{{ url_for('delete_asset', asset_id=asset.id) }}" method="post"
+        onsubmit="return confirm('Удалить актив {{ NAME_MAP.get(asset.symbol, asset.symbol) }}?');">
+    <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">🗑 Удалить</button>
+  </form>
+{% endif %}
   </div>
 </li>
           {% endfor %}
