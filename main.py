@@ -1447,14 +1447,6 @@ def delete_asset(asset_id):
     return redirect(url_for("index"))
 
 
-@app.after_request
-def add_header(response):
-    # Полностью отключаем кэширование страниц
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
-
 
 if __name__ == "__main__":
     app.run(debug=True)
