@@ -16,6 +16,8 @@ from datetime import datetime, timezone, timedelta
 from rates import price_rub_for_symbol, _get_binance_price, _get_mexc_price
 from flask import session
 from rates import ICON_MAP, NAME_MAP, ALIAS
+from flask import abort
+
 
 
 
@@ -1068,8 +1070,7 @@ def delete_order(order_id):
         order = db.query(Order).get(order_id)
 
         if not order:
-            flash("Ордер не найден", "error")
-            return redirect(url_for("index"))
+            abort(404)   
 
         if order.is_deleted:
             flash("Ордер уже удалён", "warning")
@@ -1083,8 +1084,7 @@ def delete_order(order_id):
                 .first()
             )
             if not current_shift or order.shift_id != current_shift.id or order.user_id != user.id:
-                flash("⛔ Нельзя удалить заявку из предыдущей смены", "error")
-                return redirect(url_for("index"))
+                abort(403)
 
         # помечаем удалённой
         order.is_deleted = True
@@ -1454,6 +1454,16 @@ def add_header(response):
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+
+@app.errorhandler(403)
+def handle_403(e):
+    return render_template("403.html"), 403
+
+@app.errorhandler(404)
+def handle_404(e):
+    return render_template("404.html"), 404
+
 
 
 if __name__ == "__main__":
