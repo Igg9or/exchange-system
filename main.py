@@ -17,6 +17,7 @@ from rates import price_rub_for_symbol, _get_binance_price, _get_mexc_price
 from flask import session
 from rates import ICON_MAP, NAME_MAP, ALIAS
 from flask import abort
+import logging
 
 
 
@@ -26,6 +27,7 @@ MSK = timezone(timedelta(hours=3))  # Москва (UTC+3)
 
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.DEBUG)
 app.secret_key = "super_secret_key_123"
 init_db()
 
