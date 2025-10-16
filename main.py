@@ -1354,6 +1354,15 @@ def trim_float(value, precision=8):
     except Exception:
         return str(value)
 
+@app.template_filter("to_moscow")
+def to_moscow(dt):
+    """Преобразует UTC во время Москвы (UTC+3)"""
+    if not dt:
+        return ""
+    try:
+        return (dt + timedelta(hours=3)).strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return str(dt)
 
 
 

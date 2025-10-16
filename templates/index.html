@@ -269,7 +269,7 @@
   <tr class="{% if o.is_deleted %}bg-red-100 line-through{% endif %}">
     <td class="p-2 border">{{ o.id }}</td>
     <td class="p-2 border">
-      {{ o.created_at.strftime("%d.%m.%Y %H:%M") if o.created_at else "-" }}
+      {{ o.created_at|to_moscow }}
     </td>
     <td class="p-2 border">
       {{ o.category.name if o.category else '-' }}
