@@ -6,7 +6,7 @@ from sqlalchemy import BigInteger
 from datetime import datetime, timezone, timedelta
 
 # часовой пояс UTC+3 (Москва)
-MSK = timezone(timedelta(hours=3))
+MSK = timezone.utc
 
 class Service(Base):
     __tablename__ = "services"

@@ -18,12 +18,12 @@ from flask import session
 from rates import ICON_MAP, NAME_MAP, ALIAS
 from flask import abort
 import logging
+from datetime import timezone
 
 
 
 
-
-MSK = timezone(timedelta(hours=3))  # Москва (UTC+3)
+MSK = timezone.utc
 
 
 app = Flask(__name__)
@@ -1353,6 +1353,7 @@ def trim_float(value, precision=8):
         return f"{value:.{precision}f}".rstrip('0').rstrip('.')
     except Exception:
         return str(value)
+
 
 
 
