@@ -23,6 +23,7 @@ from datetime import timezone
 
 
 
+
 MSK = timezone.utc
 
 
@@ -424,6 +425,28 @@ def index():
         args.pop("page", None)        # убираем текущую страницу
         args.pop("per_page", None) 
 
+        # --- 💰 Вводы / выводы за текущую смену ---
+        inputs_sum = outputs_sum = 0
+        if current_shift:
+            inputs_sum = (
+                db.query(func.sum(Order.amount))
+                .filter(Order.type == "admin_io")
+                .filter(Order.direction == "in")
+                .filter(Order.shift_id == current_shift.id)
+                .scalar()
+                or 0
+            )
+
+            outputs_sum = (
+                db.query(func.sum(Order.amount))
+                .filter(Order.type == "admin_io")
+                .filter(Order.direction == "out")
+                .filter(Order.shift_id == current_shift.id)
+                .scalar()
+                or 0
+            )
+
+        # --- рендер страницы ---
         return render_template(
             "index.html",
             user=user,
@@ -433,10 +456,12 @@ def index():
             orders=orders,
             assets=assets,
             all_users=all_users,
-            categories=categories,      # 🔹 передаём в шаблон
+            categories=categories,
             current_shift=current_shift,
             current_profit=current_profit,
             prev_profit=prev_profit,
+            inputs_sum=inputs_sum,      # ✅ добавили сюда
+            outputs_sum=outputs_sum,    # ✅ добавили сюда
             page=page,
             total_pages=total_pages,
             top_assets=top_assets,
@@ -940,9 +965,6 @@ def price_rub_for_asset_id(db, asset_id: int) -> float | None:
     # 3. старое поведение (через symbol)
     return price_rub_for_symbol(asset.symbol)
 
-from datetime import datetime
-
-from datetime import datetime
 
 @app.route("/admin_io", methods=["POST"])
 def admin_io():
@@ -986,11 +1008,19 @@ def admin_io():
         )
         db.add(history)
 
+        # === Определяем текущую активную смену для сервиса ===
+        current_shift = (
+            db.query(Shift)
+            .filter(Shift.service_id == service_id, Shift.end_time.is_(None))
+            .order_by(Shift.start_time.desc())
+            .first()
+        )
+
         # === Запись в таблице заявок ===
         order = Order(
             service_id=service_id,
             user_id=user.id,
-            shift_id=None,
+            shift_id=current_shift.id if current_shift else None,  # ✅ добавлено!
             type="admin_io",
             is_manual=True,
             received_asset_id=asset_id if direction == "in" else None,

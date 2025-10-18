@@ -156,6 +156,14 @@
         <p class="font-semibold text-green-600">
           Прибыль текущей смены: {{ "%.2f"|format(current_profit) }} ₽
         </p>
+
+        <p class="text-gray-700 text-sm">
+          Вводы: <span class="text-blue-600 font-medium">{{ "%.2f"|format(inputs_sum) }}</span> ₽
+        </p>
+        <p class="text-gray-700 text-sm">
+          Выводы: <span class="text-red-600 font-medium">{{ "%.2f"|format(outputs_sum) }}</span> ₽
+        </p>
+
         <p class="text-gray-600 text-sm">
           Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽
         </p>
@@ -293,7 +301,7 @@
     <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td>
     <td class="p-2 border">
   {% if not o.is_deleted %}
-    {% if current_shift and o.shift_id == current_shift.id and o.user_id == user.id %}
+    {% if current_shift and o.shift_id == current_shift.id and o.user_id == user.id and o.type != "admin_io" %}
       <!-- кнопка редактирования -->
       <button type="button"
               onclick="openEditOrderModal(
