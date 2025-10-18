@@ -298,6 +298,10 @@ def index():
         # формируем запрос заказов
         query = db.query(Order).join(User).join(Service)
 
+        # ✅ показываем все типы операций (обмены, переводы, ввод/вывод)
+        query = query.filter(Order.type.in_(["order", "admin_io", "internal_transfer", "admin_action", "admin_set"]))
+
+
         if user.role == "operator":
             query = query.filter(Order.service_id == service.id)
         elif service:
@@ -936,6 +940,10 @@ def price_rub_for_asset_id(db, asset_id: int) -> float | None:
     # 3. старое поведение (через symbol)
     return price_rub_for_symbol(asset.symbol)
 
+from datetime import datetime
+
+from datetime import datetime
+
 @app.route("/admin_io", methods=["POST"])
 def admin_io():
     if "user_id" not in session:
@@ -954,7 +962,7 @@ def admin_io():
         comment = request.form.get("comment", "")
         category_id = request.form.get("category_id")
 
-        # баланс
+        # === Баланс ===
         balance = db.query(Balance).filter_by(service_id=service_id, asset_id=asset_id).first()
         if not balance:
             balance = Balance(service_id=service_id, asset_id=asset_id, amount=0.0)
@@ -967,21 +975,23 @@ def admin_io():
         elif direction == "out":
             balance.amount -= amount
 
-        # история изменения баланса
-        db.add(BalanceHistory(
+        # === История (только допустимые поля)
+        history = BalanceHistory(
             service_id=service_id,
             asset_id=asset_id,
             old_amount=old_amount,
             new_amount=balance.amount,
             change=(amount if direction == "in" else -amount),
-        ))
+            created_at=datetime.utcnow()
+        )
+        db.add(history)
 
-        # ордер
+        # === Запись в таблице заявок ===
         order = Order(
             service_id=service_id,
             user_id=user.id,
             shift_id=None,
-            type="admin_io",   # 👈 вернули старый тип
+            type="admin_io",
             is_manual=True,
             received_asset_id=asset_id if direction == "in" else None,
             received_amount=amount if direction == "in" else 0,
@@ -994,11 +1004,14 @@ def admin_io():
             direction=direction,
             asset_id=asset_id,
             amount=amount,
+            created_at=datetime.utcnow(),
         )
         db.add(order)
         db.commit()
 
+    flash("Операция успешно выполнена!", "success")
     return redirect(url_for("index", service_id=service_id))
+
 
 
 
