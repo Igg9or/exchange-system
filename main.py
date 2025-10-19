@@ -426,6 +426,7 @@ def index():
         args.pop("per_page", None) 
 
         # --- 💰 Вводы / выводы за текущую смену ---
+        # --- 💰 Вводы / выводы за текущую смену ---
         inputs_sum = outputs_sum = 0
         if current_shift:
             inputs_sum = (
@@ -433,6 +434,7 @@ def index():
                 .filter(Order.type == "admin_io")
                 .filter(Order.direction == "in")
                 .filter(Order.shift_id == current_shift.id)
+                .filter(Order.is_deleted == False)  # ✅ добавлено
                 .scalar()
                 or 0
             )
@@ -442,6 +444,7 @@ def index():
                 .filter(Order.type == "admin_io")
                 .filter(Order.direction == "out")
                 .filter(Order.shift_id == current_shift.id)
+                .filter(Order.is_deleted == False)  # ✅ добавлено
                 .scalar()
                 or 0
             )
@@ -1518,6 +1521,23 @@ def handle_403(e):
 @app.errorhandler(404)
 def handle_404(e):
     return render_template("404.html"), 404
+
+
+# === Кастомный фильтр: разделение тысяч пробелами ===
+def format_number(value):
+    try:
+        num = float(value)
+        # Если это целое число — без дробной части
+        if num.is_integer():
+            return f"{int(num):,}".replace(",", " ")
+        else:
+            # до двух знаков после запятой
+            return f"{num:,.2f}".replace(",", " ").replace(".00", "")
+    except (ValueError, TypeError):
+        return value
+
+app.jinja_env.filters["format_number"] = format_number
+
 
 
 
