@@ -297,7 +297,11 @@ def index():
             service = db.query(Service).get(selected_service_id) if selected_service_id else None
 
         # формируем запрос заказов
-        query = db.query(Order).join(User).join(Service)
+        query = (
+            db.query(Order)
+            .outerjoin(User, User.id == Order.user_id)                # чтобы не терять ордера без user/service
+            .outerjoin(Service, Service.id == Order.service_id)       # привязываем сервис по полю в Order, а не через User
+        )
 
         # ✅ показываем все типы операций (обмены, переводы, ввод/вывод)
         query = query.filter(Order.type.in_(["order", "admin_io", "internal_transfer", "admin_action", "admin_set"]))
@@ -694,67 +698,93 @@ def admin_action():
     if "user_id" not in session:
         return redirect(url_for("login"))
 
-    db = SessionLocal()
-    user = db.query(User).get(session["user_id"])
+    with get_db() as db:
+        user = db.query(User).get(session["user_id"])
+        if user.role != "admin":
+            flash("Нет прав", "error")
+            return redirect(url_for("index"))
 
-    if user.role != "admin":
-        db.close()
-        return "Доступ запрещён", 403
+        service_id = int(request.form["service_id"])
+        asset_id = int(request.form["asset_id"])
+        amount = float(request.form["amount"])
+        action_type = request.form["action_type"]  # deposit / withdraw
+        comment = request.form.get("comment", "")
+        category_id = request.form.get("category_id")
 
-    service_id = int(request.form["service_id"])
-    asset_id = int(request.form["asset_id"])
-    amount = float(request.form["amount"])
-    action_type = request.form["action_type"]  # deposit / withdraw
-    comment = request.form.get("comment", "")
+        asset = db.query(Asset).get(asset_id)
+        if not asset:
+            flash("Актив не найден", "error")
+            return redirect(url_for("index", service_id=service_id))
 
-    # логика изменения баланса
-    balance = (
-        db.query(Balance)
-        .filter(Balance.service_id == service_id, Balance.asset_id == asset_id)
-        .first()
-    )
-    if not balance:
-        balance = Balance(service_id=service_id, asset_id=asset_id, amount=0)
-        db.add(balance)
+        # курс и сумма в рублях
+        rate_rub = price_rub_for_symbol(asset.symbol)
+        amount_rub = amount * rate_rub
+
+        # обновляем баланс в ед. актива
+        balance = (
+            db.query(Balance)
+            .filter(Balance.service_id == service_id, Balance.asset_id == asset_id)
+            .first()
+        )
+        if not balance:
+            balance = Balance(service_id=service_id, asset_id=asset_id, amount=0)
+            db.add(balance)
+            db.flush()
+
+        old_amount = balance.amount
+        if action_type == "deposit":
+            balance.amount += amount
+            direction = "in"
+        elif action_type == "withdraw":
+            balance.amount -= amount
+            direction = "out"
+        else:
+            flash("Неверный тип операции", "error")
+            return redirect(url_for("index", service_id=service_id))
+
+        db.add(BalanceHistory(
+            service_id=service_id,
+            asset_id=asset_id,
+            old_amount=old_amount,
+            new_amount=balance.amount,
+            change=balance.amount - old_amount,
+            created_at=datetime.utcnow(),
+        ))
+
+        # привязываем к активной смене, если есть
+        current_shift = (
+            db.query(Shift)
+            .filter(Shift.service_id == service_id, Shift.end_time.is_(None))
+            .order_by(Shift.start_time.desc())
+            .first()
+        )
+
+        # полноценная запись
+        order = Order(
+            service_id=service_id,
+            user_id=user.id,
+            shift_id=current_shift.id if current_shift else None,
+            type="admin_action",
+            is_manual=True,
+            comment=comment or f"{action_type} {amount} {asset.symbol}",
+            direction=direction,
+            asset_id=asset_id,
+            amount=amount_rub,  # рубли
+            received_asset_id=asset_id if direction == "in" else None,
+            received_amount=amount if direction == "in" else 0,
+            given_asset_id=asset_id if direction == "out" else None,
+            given_amount=amount if direction == "out" else 0,
+            profit_percent=0,
+            profit_rub=0,
+            category_id=int(category_id) if category_id else None,
+            created_at=datetime.utcnow(),
+        )
+        db.add(order)
         db.commit()
-        db.refresh(balance)
 
-    old_amount = balance.amount
-    if action_type == "deposit":
-        balance.amount += amount
-    elif action_type == "withdraw":
-        balance.amount -= amount
+    flash("✅ Операция выполнена", "success")
+    return redirect(url_for("index", service_id=service_id))
 
-    # сохраняем изменение в истории
-    hist = BalanceHistory(
-        service_id=service_id,
-        asset_id=asset_id,
-        old_amount=old_amount,
-        new_amount=balance.amount,
-        change=balance.amount - old_amount,
-    )
-    db.add(hist)
-
-    # фиксируем как «админскую операцию» в ордерах
-    order = Order(
-        service_id=service_id,
-        user_id=user.id,
-        shift_id=None,  # не привязываем к смене
-        type="admin_action",
-        is_manual=True,
-        received_asset_id=None,
-        received_amount=0,
-        given_asset_id=asset_id,
-        given_amount=amount if action_type == "withdraw" else 0,
-        comment=comment or f"{action_type} {amount}",
-        rate_at_execution={},
-        profit_percent=0,
-    )
-    db.add(order)
-
-    db.commit()
-    db.close()
-    return redirect(url_for("index"))
 
 @app.route("/internal_transfer", methods=["POST"])
 def internal_transfer():
@@ -982,12 +1012,22 @@ def admin_io():
 
         service_id = int(request.form["service_id"])
         asset_id = int(request.form["asset_id"])
-        direction = request.form["direction"]  # "in" | "out"
+        direction = request.form["direction"]
         amount = float(request.form["amount"])
         comment = request.form.get("comment", "")
         category_id = request.form.get("category_id")
 
-        # === Баланс ===
+        # --- 💰 Пересчёт суммы в рубли ---
+        asset = db.query(Asset).get(asset_id)
+        if not asset:
+            flash("Актив не найден", "error")
+            return redirect(url_for("index", service_id=service_id))
+
+        from rates import price_rub_for_symbol
+        rate_rub = price_rub_for_symbol(asset.symbol)
+        amount_rub = amount * rate_rub
+
+        # --- Обновляем баланс ---
         balance = db.query(Balance).filter_by(service_id=service_id, asset_id=asset_id).first()
         if not balance:
             balance = Balance(service_id=service_id, asset_id=asset_id, amount=0.0)
@@ -1000,18 +1040,15 @@ def admin_io():
         elif direction == "out":
             balance.amount -= amount
 
-        # === История (только допустимые поля)
-        history = BalanceHistory(
+        db.add(BalanceHistory(
             service_id=service_id,
             asset_id=asset_id,
             old_amount=old_amount,
             new_amount=balance.amount,
             change=(amount if direction == "in" else -amount),
             created_at=datetime.utcnow()
-        )
-        db.add(history)
+        ))
 
-        # === Определяем текущую активную смену для сервиса ===
         current_shift = (
             db.query(Shift)
             .filter(Shift.service_id == service_id, Shift.end_time.is_(None))
@@ -1019,11 +1056,10 @@ def admin_io():
             .first()
         )
 
-        # === Запись в таблице заявок ===
         order = Order(
             service_id=service_id,
             user_id=user.id,
-            shift_id=current_shift.id if current_shift else None,  # ✅ добавлено!
+            shift_id=current_shift.id if current_shift else None,
             type="admin_io",
             is_manual=True,
             received_asset_id=asset_id if direction == "in" else None,
@@ -1036,7 +1072,7 @@ def admin_io():
             category_id=int(category_id) if category_id else None,
             direction=direction,
             asset_id=asset_id,
-            amount=amount,
+            amount=amount_rub,   # 💰 Сохраняем в рублях!
             created_at=datetime.utcnow(),
         )
         db.add(order)
