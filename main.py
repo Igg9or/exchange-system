@@ -1023,8 +1023,21 @@ def admin_io():
             flash("Актив не найден", "error")
             return redirect(url_for("index", service_id=service_id))
 
-        from rates import price_rub_for_symbol
-        rate_rub = price_rub_for_symbol(asset.symbol)
+        # --- 💰 Пересчёт суммы в рубли ---
+        asset = db.query(Asset).get(asset_id)
+        if not asset:
+            flash("Актив не найден", "error")
+            return redirect(url_for("index", service_id=service_id))
+
+        # --- безопасное определение курса ---
+        if asset.manual_rate and asset.manual_rate > 0:
+            rate_rub = asset.manual_rate
+        else:
+            try:
+                rate_rub = price_rub_for_symbol(asset.symbol)
+            except Exception:
+                rate_rub = 1  # fallback — если курса нет
+
         amount_rub = amount * rate_rub
 
         # --- Обновляем баланс ---
