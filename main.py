@@ -1576,12 +1576,11 @@ def handle_404(e):
 def format_number(value):
     try:
         num = float(value)
-        # Если это целое число — без дробной части
         if num.is_integer():
             return f"{int(num):,}".replace(",", " ")
         else:
-            # до двух знаков после запятой
-            return f"{num:,.2f}".replace(",", " ").replace(".00", "")
+            # до пяти знаков после запятой
+            return f"{num:,.5f}".replace(",", " ").rstrip('0').rstrip('.')
     except (ValueError, TypeError):
         return value
 
