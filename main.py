@@ -465,10 +465,10 @@ def index():
             all_users=all_users,
             categories=categories,
             current_shift=current_shift,
-            current_profit=current_profit,
-            prev_profit=prev_profit,
-            inputs_sum=inputs_sum,      # ✅ добавили сюда
-            outputs_sum=outputs_sum,    # ✅ добавили сюда
+            current_profit=round(current_profit) if current_profit else 0,
+            prev_profit=round(prev_profit) if prev_profit else 0,
+            inputs_sum=round(inputs_sum) if inputs_sum else 0,
+            outputs_sum=round(outputs_sum) if outputs_sum else 0,
             page=page,
             total_pages=total_pages,
             top_assets=top_assets,
