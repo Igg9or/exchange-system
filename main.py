@@ -19,7 +19,7 @@ from rates import ICON_MAP, NAME_MAP, ALIAS
 from flask import abort
 import logging
 from datetime import timezone
-
+from datetime import datetime, timedelta
 
 
 
@@ -1511,8 +1511,6 @@ def edit_io(io_id):
 
 
 
-
-@app.route("/delete_io/<int:io_id>", methods=["POST"])
 @app.route("/delete_io/<int:io_id>", methods=["POST"])
 def delete_io(io_id):
     with get_db() as db:
@@ -1585,6 +1583,134 @@ def format_number(value):
         return value
 
 app.jinja_env.filters["format_number"] = format_number
+
+
+
+@app.route("/admin/analytics", methods=["GET"])
+def admin_analytics():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        # 🔹 Проверка прав
+        user = db.get(User, session["user_id"])
+        if not user or user.role != "admin":
+            flash("Нет доступа", "error")
+            return redirect(url_for("index"))
+
+        services = db.query(Service).all()
+        selected_service_id = request.args.get("service_id", type=int)
+
+        # --- дата по умолчанию — сегодня ---
+        selected_date_str = request.args.get("date")
+        if selected_date_str:
+            try:
+                selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d")
+            except ValueError:
+                selected_date = datetime.now()
+        else:
+            selected_date = datetime.now()
+            selected_date_str = selected_date.strftime("%Y-%m-%d")
+
+        selected_shift_id = request.args.get("shift_id", type=int)
+
+        # --- список смен около выбранной даты ---
+        shifts = []
+        if selected_service_id:
+            date_start = selected_date - timedelta(days=1)
+            date_end = selected_date + timedelta(days=1)
+            from sqlalchemy import or_, and_
+
+            shifts = (
+                db.query(Shift)
+                .filter(
+                    Shift.service_id == selected_service_id,
+                    or_(
+                        # началась в диапазоне
+                        and_(Shift.start_time >= date_start, Shift.start_time <= date_end),
+                        # закончилась в диапазоне
+                        and_(Shift.end_time != None, Shift.end_time >= date_start, Shift.end_time <= date_end),
+                        # или пересекает диапазон (началась до и закончилась после)
+                        and_(Shift.start_time <= date_start, Shift.end_time != None, Shift.end_time >= date_end)
+                    )
+                )
+                .order_by(Shift.start_time.desc())
+                .all()
+            )
+
+        # --- выбранная смена ---
+        selected_shift = db.get(Shift, selected_shift_id) if selected_shift_id else None
+
+        orders = []
+        totals = {}
+        operators = []
+
+        if selected_shift:
+            # заявки в смене
+            orders = (
+                db.query(Order)
+                .filter(Order.shift_id == selected_shift.id, Order.is_deleted == False)
+                .all()
+            )
+
+            # прибыль и ввод/вывод
+            profit_sum = sum(o.profit_rub or 0 for o in orders)
+            inputs_sum = sum(o.amount or 0 for o in orders if o.direction == "in")
+            outputs_sum = sum(o.amount or 0 for o in orders if o.direction == "out")
+
+            totals = {
+                "profit": round(profit_sum, 2),
+                "inputs": round(inputs_sum, 2),
+                "outputs": round(outputs_sum, 2)
+            }
+
+            # операторы, работавшие в смене
+            operators = (
+                db.query(User.login)
+                .join(Order, Order.user_id == User.id)
+                .filter(Order.shift_id == selected_shift.id, Order.is_deleted == False)
+                .distinct()
+                .all()
+            )
+            operators = [o[0] for o in operators]
+
+        # --- 🔹 данные для графика прибыли по всем сменам сервиса ---
+        chart_labels = []
+        chart_profits = []
+
+        if selected_service_id:
+            all_shifts = (
+                db.query(Shift)
+                .filter(Shift.service_id == selected_service_id)
+                .order_by(Shift.start_time.asc())
+                .all()
+            )
+            for s in all_shifts:
+                orders_in_shift = (
+                    db.query(Order)
+                    .filter(Order.shift_id == s.id, Order.is_deleted == False)
+                    .all()
+                )
+                total_profit = sum(o.profit_rub or 0 for o in orders_in_shift)
+                chart_labels.append(s.start_time.strftime("%d.%m.%Y"))
+                chart_profits.append(round(total_profit, 2))
+
+        chart_data = {"labels": chart_labels, "profits": chart_profits}
+
+        # --- отдаём шаблон ---
+        return render_template(
+            "admin_analytics.html",
+            user=user,
+            services=services,
+            selected_service_id=selected_service_id,
+            selected_date=selected_date_str,
+            shifts=shifts,
+            selected_shift=selected_shift,
+            orders=orders,
+            totals=totals,
+            operators=operators,
+            chart_data=chart_data,
+        )
 
 
 
