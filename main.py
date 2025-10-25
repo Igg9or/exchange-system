@@ -1674,9 +1674,13 @@ def admin_analytics():
             )
             operators = [o[0] for o in operators]
 
-        # --- 🔹 данные для графика прибыли по всем сменам сервиса ---
-        chart_labels = []
-        chart_profits = []
+        # --- 📊 Формируем данные для графиков ---
+        chart_data = {
+            "labels": [],
+            "profits": [],
+            "inputs": [],
+            "outputs": []
+        }
 
         if selected_service_id:
             all_shifts = (
@@ -1685,17 +1689,23 @@ def admin_analytics():
                 .order_by(Shift.start_time.asc())
                 .all()
             )
-            for s in all_shifts:
+            for sh in all_shifts:
+                chart_data["labels"].append(sh.start_time.strftime("%d.%m.%Y"))
+
+                # вычисляем данные по каждой смене
                 orders_in_shift = (
                     db.query(Order)
-                    .filter(Order.shift_id == s.id, Order.is_deleted == False)
+                    .filter(Order.shift_id == sh.id, Order.is_deleted == False)
                     .all()
                 )
-                total_profit = sum(o.profit_rub or 0 for o in orders_in_shift)
-                chart_labels.append(s.start_time.strftime("%d.%m.%Y"))
-                chart_profits.append(round(total_profit, 2))
 
-        chart_data = {"labels": chart_labels, "profits": chart_profits}
+                total_profit = sum(o.profit_rub or 0 for o in orders_in_shift)
+                total_inputs = sum(o.amount or 0 for o in orders_in_shift if o.direction == "in")
+                total_outputs = sum(o.amount or 0 for o in orders_in_shift if o.direction == "out")
+
+                chart_data["profits"].append(round(total_profit, 2))
+                chart_data["inputs"].append(round(total_inputs, 2))
+                chart_data["outputs"].append(round(total_outputs, 2))
 
         # --- отдаём шаблон ---
         return render_template(
@@ -1711,6 +1721,7 @@ def admin_analytics():
             operators=operators,
             chart_data=chart_data,
         )
+
 
 
 
