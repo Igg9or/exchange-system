@@ -239,37 +239,29 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   });
 
-  // --- 🔹 адаптивный масштаб по медиане ---
+  // --- адаптивный масштаб ---
   function rescaleYAxis(data) {
+    if (!data || data.length === 0) return;
     const sorted = [...data].sort((a, b) => a - b);
     const q1 = sorted[Math.floor(sorted.length * 0.25)];
     const q3 = sorted[Math.floor(sorted.length * 0.75)];
     const iqr = q3 - q1;
     const min = Math.max(Math.min(...data), q1 - 1.5 * iqr);
     const max = Math.min(Math.max(...data), q3 + 1.5 * iqr);
-    chart.options.scales.y.min = min;
-    chart.options.scales.y.max = max;
-    // --- 💰 вычисляем итоги периода ---
-const totalProfit = filteredData.reduce((a, b) => a + b, 0);
-const totalInputs = 0;  // 🔹 позже можно будет добавить реальные вводы
-const totalOutputs = 0;
-
-document.getElementById("totalProfit").textContent = totalProfit.toLocaleString() + " ₽";
-document.getElementById("totalInputs").textContent = totalInputs.toLocaleString() + " ₽";
-document.getElementById("totalOutputs").textContent = totalOutputs.toLocaleString() + " ₽";
-
-    chart.update();
+    const padding = (max - min) * 0.1;
+    chart.options.scales.y.min = min - padding;
+    chart.options.scales.y.max = max + padding;
   }
 
-  // --- 🔹 фильтры по времени ---
+  // --- фильтрация по периоду ---
   function filterData(days) {
     const now = new Date();
     const filteredLabels = [];
     const filteredData = [];
 
     for (let i = 0; i < labelsAll.length; i++) {
-      const dateParts = labelsAll[i].split(".");
-      const date = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+      const [day, month, year] = labelsAll[i].split(".");
+      const date = new Date(`${year}-${month}-${day}`);
       const diffDays = (now - date) / (1000 * 60 * 60 * 24);
       if (days === 0 || diffDays <= days) {
         filteredLabels.push(labelsAll[i]);
@@ -279,28 +271,31 @@ document.getElementById("totalOutputs").textContent = totalOutputs.toLocaleStrin
 
     chart.data.labels = filteredLabels;
     chart.data.datasets[0].data = filteredData;
+
+    // --- итоги периода ---
+    const totalProfit = filteredData.reduce((a, b) => a + b, 0);
+    document.getElementById("totalProfit").textContent = totalProfit.toLocaleString() + " ₽";
+
+    // (пока вводы/выводы 0)
+    document.getElementById("totalInputs").textContent = "0 ₽";
+    document.getElementById("totalOutputs").textContent = "0 ₽";
+
     rescaleYAxis(filteredData);
     chart.update();
   }
 
-  // --- кнопки ---
-  document.getElementById("filterAll").addEventListener("click", () => {
-    setActive("filterAll"); filterData(0);
-  });
-  document.getElementById("filterMonth").addEventListener("click", () => {
-    setActive("filterMonth"); filterData(30);
-  });
-  document.getElementById("filterWeek").addEventListener("click", () => {
-    setActive("filterWeek"); filterData(7);
-  });
-
+  // --- кнопки фильтра ---
   function setActive(id) {
     document.querySelectorAll(".btn-group .btn").forEach(btn => btn.classList.remove("active"));
     document.getElementById(id).classList.add("active");
   }
 
-  // старт
-  rescaleYAxis(profitsAll);
+  document.getElementById("filterAll").addEventListener("click", () => { setActive("filterAll"); filterData(0); });
+  document.getElementById("filterMonth").addEventListener("click", () => { setActive("filterMonth"); filterData(30); });
+  document.getElementById("filterWeek").addEventListener("click", () => { setActive("filterWeek"); filterData(7); });
+
+  // --- стартовая инициализация ---
+  filterData(0);
 });
 </script>
 {% endif %}
