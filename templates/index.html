@@ -18,9 +18,7 @@
       <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
       <a href="javascript:void(0)" onclick="document.getElementById('categoriesModal').classList.remove('hidden')"
    class="bg-indigo-500 text-white px-3 py-1 rounded">📂 Категории</a>
-{% if user.role == "admin" %}
-  <a href="{{ url_for('admin_analytics') }}" class="btn btn-outline-primary mb-3">📊 Аналитика</a>
-{% endif %}
+
       <form method="get" class="inline">
         <select name="service_id" onchange="this.form.submit()" class="border px-2 py-1 rounded">
           <option value="">Все сервисы</option>
