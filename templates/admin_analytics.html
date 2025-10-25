@@ -213,23 +213,30 @@ document.addEventListener("DOMContentLoaded", function() {
             zoom: {
                 wheel: {
                 enabled: true,
-                modifierKey: 'ctrl', // масштаб с зажатым CTRL — безопаснее
-                speed: 0.05          // уменьшить скорость (по умолчанию 0.1)
+                speed: 0.05,
                 },
                 pinch: { enabled: true },
                 mode: 'x',
                 animation: {
-                duration: 500,
+                duration: 400,
                 easing: 'easeOutCubic'
+                },
+                onZoom: ({chart}) => {
+                adjustYAxis(chart);
+                },
+                onZoomComplete: ({chart}) => {
+                adjustYAxis(chart);
                 }
             },
             pan: {
                 enabled: true,
                 mode: 'x',
-                threshold: 10,  // чтобы не "дёргался"
                 animation: {
-                duration: 400,
+                duration: 300,
                 easing: 'easeOutQuad'
+                },
+                onPan: ({chart}) => {
+                adjustYAxis(chart);
                 }
             },
             limits: {
@@ -337,6 +344,28 @@ document.addEventListener("DOMContentLoaded", function() {
 document.getElementById("resetZoom").addEventListener("click", () => {
   chart.resetZoom();
 });
+
+function adjustYAxis(chart) {
+  const data = chart.data.datasets[0].data;
+  if (!data || !data.length) return;
+
+  const visibleRange = chart.scales.x;
+  const startIndex = Math.floor(visibleRange.min);
+  const endIndex = Math.ceil(visibleRange.max);
+
+  const visibleData = data.slice(startIndex, endIndex + 1);
+  if (!visibleData.length) return;
+
+  const min = Math.min(...visibleData);
+  const max = Math.max(...visibleData);
+  const padding = (max - min) * 0.15;
+
+  chart.options.scales.y.min = min - padding;
+  chart.options.scales.y.max = max + padding;
+  chart.update('none'); // без анимации, чтобы не тормозило
+}
+
+
 
 });
 </script>
