@@ -154,34 +154,49 @@
 {% if selected_service_id %}
 <hr class="mt-5 mb-4">
 <h4>📈 Визуализация прибыли по сменам</h4>
-<canvas id="profitChart" height="120"></canvas>
+
+<!-- 🔹 Фильтры по периоду -->
+<div class="btn-group mb-3" role="group" aria-label="Выбор периода">
+  <button class="btn btn-outline-primary active" id="filterAll">За всё время</button>
+  <button class="btn btn-outline-primary" id="filterMonth">За месяц</button>
+  <button class="btn btn-outline-primary" id="filterWeek">За неделю</button>
+</div>
+
+<div style="position: relative; height: 300px; width: 100%; max-width: 1000px; margin: auto;">
+  <canvas id="profitChart"></canvas>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
+  const labelsAll = {{ chart_data.labels|tojson }};
+  const profitsAll = {{ chart_data.profits|tojson }};
   const ctx = document.getElementById("profitChart").getContext("2d");
+
   const gradient = ctx.createLinearGradient(0, 0, 0, 400);
   gradient.addColorStop(0, "rgba(75,192,192,0.4)");
   gradient.addColorStop(1, "rgba(75,192,192,0)");
 
-  new Chart(ctx, {
+  const chart = new Chart(ctx, {
     type: "line",
     data: {
-      labels: {{ chart_data.labels|tojson }},
+      labels: labelsAll,
       datasets: [{
         label: "Прибыль (₽)",
-        data: {{ chart_data.profits|tojson }},
+        data: profitsAll,
         fill: true,
         backgroundColor: gradient,
         borderColor: "rgba(75,192,192,1)",
         borderWidth: 2,
         tension: 0.4,
-        pointRadius: 4,
+        pointRadius: 3,
         pointHoverRadius: 6
       }]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -191,11 +206,76 @@ document.addEventListener("DOMContentLoaded", function() {
         }
       },
       scales: {
-        y: { ticks: { callback: v => v.toLocaleString() + " ₽" } }
+        x: {
+          ticks: { color: "#666", maxRotation: 50, minRotation: 50 },
+          grid: { display: false }
+        },
+        y: {
+          beginAtZero: false,
+          ticks: {
+            callback: v => v.toLocaleString() + " ₽",
+            color: "#666"
+          },
+          grid: { color: "rgba(0,0,0,0.05)" }
+        }
       },
       animation: { duration: 1000, easing: "easeOutQuart" }
     }
   });
+
+  // --- 🔹 адаптивный масштаб по медиане ---
+  function rescaleYAxis(data) {
+    const sorted = [...data].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor(sorted.length * 0.25)];
+    const q3 = sorted[Math.floor(sorted.length * 0.75)];
+    const iqr = q3 - q1;
+    const min = Math.max(Math.min(...data), q1 - 1.5 * iqr);
+    const max = Math.min(Math.max(...data), q3 + 1.5 * iqr);
+    chart.options.scales.y.min = min;
+    chart.options.scales.y.max = max;
+    chart.update();
+  }
+
+  // --- 🔹 фильтры по времени ---
+  function filterData(days) {
+    const now = new Date();
+    const filteredLabels = [];
+    const filteredData = [];
+
+    for (let i = 0; i < labelsAll.length; i++) {
+      const dateParts = labelsAll[i].split(".");
+      const date = new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`);
+      const diffDays = (now - date) / (1000 * 60 * 60 * 24);
+      if (days === 0 || diffDays <= days) {
+        filteredLabels.push(labelsAll[i]);
+        filteredData.push(profitsAll[i]);
+      }
+    }
+
+    chart.data.labels = filteredLabels;
+    chart.data.datasets[0].data = filteredData;
+    rescaleYAxis(filteredData);
+    chart.update();
+  }
+
+  // --- кнопки ---
+  document.getElementById("filterAll").addEventListener("click", () => {
+    setActive("filterAll"); filterData(0);
+  });
+  document.getElementById("filterMonth").addEventListener("click", () => {
+    setActive("filterMonth"); filterData(30);
+  });
+  document.getElementById("filterWeek").addEventListener("click", () => {
+    setActive("filterWeek"); filterData(7);
+  });
+
+  function setActive(id) {
+    document.querySelectorAll(".btn-group .btn").forEach(btn => btn.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+  }
+
+  // старт
+  rescaleYAxis(profitsAll);
 });
 </script>
 {% endif %}
