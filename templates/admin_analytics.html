@@ -148,6 +148,10 @@
     <canvas id="profitChart"></canvas>
   </div>
 
+  <div class="mt-2">
+  <button class="btn btn-sm btn-outline-secondary" id="resetZoom">Сбросить масштаб</button>
+</div>
+
   <!-- 💰 Итоги за выбранный период -->
   <div class="card shadow-sm" style="min-width: 260px; flex-shrink: 0;">
     <div class="card-body">
@@ -162,6 +166,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {
   const labelsAll = {{ chart_data.labels|tojson }};
@@ -187,8 +193,10 @@ document.addEventListener("DOMContentLoaded", function() {
         borderWidth: 2,
         tension: 0.4,
         pointRadius: 3,
-        pointHoverRadius: 6
-      }]
+        pointHoverRadius: 8,
+        shadowColor: "rgba(0,0,0,0.1)",
+        shadowBlur: 6
+        }]
     },
     options: {
       responsive: true,
@@ -197,25 +205,39 @@ document.addEventListener("DOMContentLoaded", function() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          callbacks: {
+            callbacks: {
             label: ctx => `Прибыль: ${ctx.parsed.y.toLocaleString()} ₽`
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: "#666", maxRotation: 50, minRotation: 50 },
-          grid: { display: false }
+            }
         },
-        y: {
-          beginAtZero: false,
-          ticks: {
-            callback: v => v.toLocaleString() + " ₽",
-            color: "#666"
-          },
-          grid: { color: "rgba(0,0,0,0.05)" }
-        }
-      },
+        zoom: {
+            zoom: {
+                wheel: {
+                enabled: true,
+                modifierKey: 'ctrl', // масштаб с зажатым CTRL — безопаснее
+                speed: 0.05          // уменьшить скорость (по умолчанию 0.1)
+                },
+                pinch: { enabled: true },
+                mode: 'x',
+                animation: {
+                duration: 500,
+                easing: 'easeOutCubic'
+                }
+            },
+            pan: {
+                enabled: true,
+                mode: 'x',
+                threshold: 10,  // чтобы не "дёргался"
+                animation: {
+                duration: 400,
+                easing: 'easeOutQuad'
+                }
+            },
+            limits: {
+                x: { min: 'original', max: 'original' },
+                y: { min: 'original', max: 'original' }
+            }
+            }
+        },
       animation: { duration: 1000, easing: "easeOutQuart" }
     }
   });
@@ -310,6 +332,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // --- стартовая инициализация ---
   filterData(0);
+
+
+document.getElementById("resetZoom").addEventListener("click", () => {
+  chart.resetZoom();
+});
+
 });
 </script>
 {% endif %}
