@@ -113,73 +113,36 @@
 
 
  <div class="card shadow-sm border-0">
-  <div class="card-body">
-    <h6 class="card-title mb-3">📋 Заявки этой смены</h6>
-
-    <div class="table-responsive">
-      <table class="table table-bordered table-hover align-middle mb-0">
-        <thead class="table-light text-center">
-          <tr>
-            <th style="width: 70px;">ID</th>
-            <th style="width: 160px;">Время</th>
-            <th style="width: 120px;">Категория</th>
-            <th style="width: 140px;">Оператор</th>
-            <th style="width: 180px;">Получили</th>
-            <th style="width: 180px;">Отдали</th>
-            <th>Комментарий</th>
-            <th style="width: 120px;">Прибыль (%)</th>
-            <th style="width: 140px;">Прибыль (₽)</th>
-          </tr>
-        </thead>
-        <tbody class="text-center">
-          {% for o in orders %}
-          <tr>
-            <td class="text-muted">{{ o.id }}</td>
-            <td>{{ o.created_at|to_moscow if o.created_at else '—' }}</td>
-            <td class="text-uppercase small">{{ o.category or '-' }}</td>
-            <td class="fw-semibold">{{ o.user.login if o.user else '—' }}</td>
-
-            <!-- Получили -->
-            <td class="fw-semibold text-success">
-              {% if o.received_amount %}
-                {{ o.received_amount|format_number }} {{ o.received_currency }}
-              {% else %}
-                —
-              {% endif %}
-            </td>
-
-            <!-- Отдали -->
-            <td class="fw-semibold text-danger">
-              {% if o.sent_amount %}
-                {{ o.sent_amount|format_number }} {{ o.sent_currency }}
-              {% else %}
-                —
-              {% endif %}
-            </td>
-
-            <!-- Комментарий -->
-            <td class="text-start text-muted">{{ o.comment or '—' }}</td>
-
-            <!-- Прибыль % -->
-            <td class="{% if o.profit_percent > 0 %}text-success{% elif o.profit_percent < 0 %}text-danger{% endif %}">
-              {% if o.profit_percent is not none %}
-                {{ "%.2f"|format(o.profit_percent) }} %
-              {% else %}
-                —
-              {% endif %}
-            </td>
-
-            <!-- Прибыль ₽ -->
-            <td class="text-end fw-semibold {% if o.profit_rub < 0 %}text-danger{% else %}text-success{% endif %}">
-              {{ o.profit_rub|format_number }} ₽
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="card-body">
+      <h6 class="card-title mb-3">📋 Заявки этой смены</h6>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle table-sm">
+          <thead class="table-light text-center">
+            <tr>
+              <th style="width: 70px;">ID</th>
+              <th style="width: 140px;">Оператор</th>
+              <th style="width: 120px;">Тип</th>
+              <th>Комментарий</th>
+              <th style="width: 150px;" class="text-end">Прибыль ₽</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in orders %}
+              <tr>
+                <td class="text-center text-muted">{{ o.id }}</td>
+                <td class="fw-semibold">{{ o.user.login if o.user else '—' }}</td>
+                <td class="text-uppercase text-secondary small">{{ o.type }}</td>
+                <td>{{ o.comment or '—' }}</td>
+                <td class="text-end {% if o.profit_rub < 0 %}text-danger{% else %}text-success{% endif %}">
+                  {{ o.profit_rub|format_number }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-</div>
 {% endif %}
 
   
