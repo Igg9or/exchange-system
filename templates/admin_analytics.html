@@ -67,6 +67,51 @@
 
   {% if selected_shift %}
   <!-- 📅 Информация о смене -->
+
+  <!-- 📅 Информация о смене -->
+<div class="card shadow-sm border-0 mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">
+      <span class="me-2">📅</span>Смена #{{ selected_shift.number or selected_shift.id }}
+    </h5>
+
+    <div class="row text-muted small mb-2">
+      <div class="col-md-4">
+        <strong>Начало:</strong> {{ selected_shift.start_time|to_moscow }}
+      </div>
+      <div class="col-md-4">
+        <strong>Конец:</strong> {{ selected_shift.end_time|to_moscow if selected_shift.end_time else '—' }}
+      </div>
+      <div class="col-md-4">
+        <strong>Работали:</strong>
+        {% if operators %}
+          {{ operators|join(', ') }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="row text-center fw-semibold">
+      <div class="col-md-4">
+        💰 Прибыль:
+        <span class="text-success">{{ totals.profit|default(0)|format_number }} ₽</span>
+      </div>
+      <div class="col-md-4">
+        ⬆️ Вводы:
+        <span class="text-primary">{{ totals.inputs|default(0)|format_number }} ₽</span>
+      </div>
+      <div class="col-md-4">
+        ⬇️ Выводы:
+        <span class="text-danger">{{ totals.outputs|default(0)|format_number }} ₽</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+
  <div class="card shadow-sm border-0">
   <div class="card-body">
     <h6 class="card-title mb-3">📋 Заявки этой смены</h6>
