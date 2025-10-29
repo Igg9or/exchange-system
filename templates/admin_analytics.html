@@ -330,17 +330,21 @@ ctx.canvas.onclick = function(evt) {
 
   // --- адаптивный масштаб ---
   function rescaleYAxis(data) {
-    if (!data || data.length === 0) return;
-    const sorted = [...data].sort((a, b) => a - b);
-    const q1 = sorted[Math.floor(sorted.length * 0.25)];
-    const q3 = sorted[Math.floor(sorted.length * 0.75)];
-    const iqr = q3 - q1;
-    const min = Math.max(Math.min(...data), q1 - 1.5 * iqr);
-    const max = Math.min(Math.max(...data), q3 + 1.5 * iqr);
-    const padding = (max - min) * 0.1;
-    chart.options.scales.y.min = min - padding;
-    chart.options.scales.y.max = max + padding;
-  }
+  if (!data || data.length === 0) return;
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+
+  // добавляем больше “воздуха” сверху (15–20%)
+  const paddingTop = (max - min) * 0.2;
+  const paddingBottom = (max - min) * 0.1;
+
+  chart.options.scales.y.min = min - paddingBottom;
+  chart.options.scales.y.max = max + paddingTop;
+
+  // обновляем ось без анимации, чтобы не мигало
+  chart.update('none');
+}
 
   // --- фильтрация по периоду ---
   function filterData(days) {
