@@ -75,6 +75,13 @@
       <span class="me-2">📅</span>Смена #{{ selected_shift.number or selected_shift.id }}
     </h5>
 
+    <form method="post" action="{{ url_for('admin_delete_shift', shift_id=selected_shift.id) }}"
+      onsubmit="return confirm('Удалить эту смену из статистики?')" class="d-inline">
+  <button type="submit" class="btn btn-sm btn-outline-danger ms-2">
+    🗑 Удалить смену
+  </button>
+</form>
+
     <div class="row text-muted small mb-2">
       <div class="col-md-4">
         <strong>Начало:</strong> {{ selected_shift.start_time|to_moscow }}

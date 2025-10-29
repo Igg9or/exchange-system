@@ -24,6 +24,10 @@ ALTER TABLE balances_history
     ADD CONSTRAINT balances_history_asset_id_fkey
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
 
+
+psql -U postgres -h localhost -d exchange_db
+
+
     cd /home/moonlightexchanger.com_sarg-www/new_project/exchange-system
 
 git pull

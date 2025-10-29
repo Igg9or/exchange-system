@@ -53,7 +53,7 @@ class Shift(Base):
     end_time = Column(DateTime, nullable=True)
     started_by = Column(Integer, ForeignKey("users.id"))
     user = relationship("User")
-    
+    is_deleted = Column(Boolean, default=False)
 
 
 class Order(Base):

@@ -1686,7 +1686,10 @@ def admin_analytics():
         if selected_service_id:
             all_shifts = (
                 db.query(Shift)
-                .filter(Shift.service_id == selected_service_id)
+                .filter(
+                    Shift.service_id == selected_service_id,
+                    Shift.is_deleted == False  # ✅ исключаем удалённые смены
+                )
                 .order_by(Shift.start_time.asc())
                 .all()
             )
@@ -1725,6 +1728,28 @@ def admin_analytics():
         )
 
 
+@app.route("/admin/shift/delete/<int:shift_id>", methods=["POST"])
+def admin_delete_shift(shift_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        user = db.get(User, session["user_id"])
+        if not user or user.role != "admin":
+            flash("Нет доступа", "error")
+            return redirect(url_for("index"))
+
+        shift = db.get(Shift, shift_id)
+        if not shift:
+            flash("Смена не найдена", "error")
+            return redirect(url_for("admin_analytics"))
+
+        # ✅ помечаем смену удалённой
+        shift.is_deleted = True
+        db.commit()
+
+        flash(f"Смена #{shift.number or shift.id} помечена как удалённая", "success")
+        return redirect(url_for("admin_analytics", service_id=shift.service_id))
 
 
 
