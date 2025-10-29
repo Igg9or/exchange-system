@@ -387,7 +387,7 @@ ctx.canvas.onclick = function(evt) {
   document.getElementById("filterAll").addEventListener("click", () => { setActive("filterAll"); filterData(0); });
   document.getElementById("filterMonth").addEventListener("click", () => { setActive("filterMonth"); filterData(30); });
   document.getElementById("filterWeek").addEventListener("click", () => { setActive("filterWeek"); filterData(7); });
-  document.getElementById("applyDates").addEventListener("click", () => {
+ document.getElementById("applyDates").addEventListener("click", () => {
   const from = document.getElementById("dateFrom").value;
   const to = document.getElementById("dateTo").value;
 
@@ -397,22 +397,34 @@ ctx.canvas.onclick = function(evt) {
   const dateTo = new Date(to);
 
   const filteredLabels = [];
-  const filteredData = [];
+  const filteredProfits = [];
+  const filteredInputs = [];
+  const filteredOutputs = [];
 
   for (let i = 0; i < labelsAll.length; i++) {
     const [day, month, year] = labelsAll[i].split(".");
     const date = new Date(`${year}-${month}-${day}`);
     if (date >= dateFrom && date <= dateTo) {
       filteredLabels.push(labelsAll[i]);
-      filteredData.push(profitsAll[i]);
+      filteredProfits.push(profitsAll[i]);
+      filteredInputs.push(inputsAll[i]);
+      filteredOutputs.push(outputsAll[i]);
     }
   }
 
   chart.data.labels = filteredLabels;
-  chart.data.datasets[0].data = filteredData;
-  const totalProfit = filteredData.reduce((a, b) => a + b, 0);
+  chart.data.datasets[0].data = filteredProfits;
+
+  // 💰 Пересчёт итогов
+  const totalProfit = filteredProfits.reduce((a, b) => a + b, 0);
+  const totalInputs = filteredInputs.reduce((a, b) => a + b, 0);
+  const totalOutputs = filteredOutputs.reduce((a, b) => a + b, 0);
+
   document.getElementById("totalProfit").textContent = totalProfit.toLocaleString() + " ₽";
-  rescaleYAxis(filteredData);
+  document.getElementById("totalInputs").textContent = totalInputs.toLocaleString() + " ₽";
+  document.getElementById("totalOutputs").textContent = totalOutputs.toLocaleString() + " ₽";
+
+  rescaleYAxis(filteredProfits);
   chart.update();
 });
 
