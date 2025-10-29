@@ -228,6 +228,8 @@ document.addEventListener("DOMContentLoaded", function() {
   const ctx = document.getElementById("profitChart").getContext("2d");
   const inputsAll = {{ chart_data.inputs|tojson }};
     const outputsAll = {{ chart_data.outputs|tojson }};
+    const shiftIds = {{ chart_data.shift_ids|tojson }};
+    
 
   const gradient = ctx.createLinearGradient(0, 0, 0, 400);
   gradient.addColorStop(0, "rgba(75,192,192,0.4)");
@@ -301,6 +303,23 @@ document.addEventListener("DOMContentLoaded", function() {
       animation: { duration: 1000, easing: "easeOutQuart" }
     }
   });
+
+  // === 🖱 Переход на страницу смены при клике по точке ===
+// === 🖱 Переход к конкретной смене по клику на точку ===
+ctx.canvas.onclick = function(evt) {
+  const points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+  if (points.length) {
+    const index = points[0].index;
+    const shiftId = shiftIds[index]; // ✅ берём ID смены
+    const params = new URLSearchParams(window.location.search);
+    const serviceId = params.get("service_id");
+    if (!serviceId || !shiftId) return;
+
+    // переход на страницу этой смены
+    window.location.href = `/admin/analytics?service_id=${serviceId}&shift_id=${shiftId}`;
+  }
+};
+
 
   // --- адаптивный масштаб ---
   function rescaleYAxis(data) {

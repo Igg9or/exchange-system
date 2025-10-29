@@ -1679,7 +1679,8 @@ def admin_analytics():
             "labels": [],
             "profits": [],
             "inputs": [],
-            "outputs": []
+            "outputs": [],
+            "shift_ids": []  
         }
 
         if selected_service_id:
@@ -1691,6 +1692,7 @@ def admin_analytics():
             )
             for sh in all_shifts:
                 chart_data["labels"].append(sh.start_time.strftime("%d.%m.%Y"))
+                chart_data["shift_ids"].append(sh.id)
 
                 # вычисляем данные по каждой смене
                 orders_in_shift = (
