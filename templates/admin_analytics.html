@@ -394,6 +394,13 @@ document.addEventListener("DOMContentLoaded", function() {
   filterData(0);
 
 
+// --- Автоматический сброс масштаба после загрузки ---
+setTimeout(() => {
+  chart.resetZoom();
+  setTimeout(() => chart.resetZoom(), 300); // второй раз — как у тебя вручную
+}, 200);
+
+// --- Кнопка ручного сброса ---
 document.getElementById("resetZoom").addEventListener("click", () => {
   chart.resetZoom();
 });
