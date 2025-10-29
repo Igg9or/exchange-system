@@ -114,7 +114,7 @@
 
  <div class="card shadow-sm border-0">
     <div class="card-body">
-      <h6 class="card-title mb-3">📋 Заявки этой смены</h6>
+     <h6 class="card-title mb-3">📋 Заявки этой смены</h6>
 <div class="table-responsive">
   <table class="table table-hover align-middle table-sm">
     <thead class="table-light text-center">
@@ -132,7 +132,14 @@
     </thead>
     <tbody>
       {% for o in orders %}
-      <tr>
+      <tr
+        class="
+          {% if o.is_deleted %}table-danger text-decoration-line-through
+          {% elif o.type == 'admin_io' or o.type == 'admin_action' %}table-secondary
+          {% elif o.type == 'internal_transfer' %}table-info
+          {% endif %}
+        "
+      >
         <td class="text-center">{{ o.id }}</td>
         <td>{{ o.created_at|to_moscow }}</td>
         <td>{{ o.category.name if o.category else '-' }}</td>
@@ -147,7 +154,7 @@
         </td>
         <td>{{ o.comment or '—' }}</td>
         <td>{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
-        <td class="{% if o.profit_rub < 0 %}text-danger{% else %}text-success{% endif %}">
+        <td class="text-end {% if o.profit_rub < 0 %}text-danger{% else %}text-success{% endif %}">
           {{ "%.2f"|format(o.profit_rub or 0) }} ₽
         </td>
       </tr>
@@ -155,6 +162,7 @@
     </tbody>
   </table>
 </div>
+
 
     </div>
   </div>
