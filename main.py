@@ -20,6 +20,8 @@ from flask import abort
 import logging
 from datetime import timezone
 from datetime import datetime, timedelta
+from sqlalchemy import func, case
+
 
 
 
@@ -201,7 +203,7 @@ def admin_change_balance(db: Session, service_id: int, asset_id: int, amount: fl
 
 # ===== ВНУТРЕННИЕ ПЕРЕВОДЫ =====
 
-def internal_transfer(db: Session, from_service_id: int, to_service_id: int, asset_id: int, amount: float, user_id: int, comment: str = ""):
+def perform_internal_transfer(db: Session, from_service_id: int, to_service_id: int, asset_id: int, amount: float, user_id: int, comment: str = ""):
     if amount <= 0:
         raise ValueError("Сумма перевода должна быть положительной")
 
@@ -431,6 +433,7 @@ def index():
 
         # --- 💰 Вводы / выводы за текущую смену ---
         # --- 💰 Вводы / выводы за текущую смену ---
+        transfers_sum = 0
         inputs_sum = outputs_sum = 0
         if current_shift:
             inputs_sum = (
@@ -453,6 +456,44 @@ def index():
                 or 0
             )
 
+                    # --- 🔁 Переводы между сервисами за текущую смену (в рублях) ---
+            transfers_sum = 0
+            if current_shift:
+                # Для сервиса: исходящие - отрицательные, входящие - положительные
+                outgoing = (
+                    db.query(Order)
+                    .filter(Order.type == "internal_transfer")
+                    .filter(Order.shift_id == current_shift.id)
+                    .filter(Order.service_id == service.id)
+                    .filter(Order.given_amount > 0)
+                    .filter(Order.is_deleted == False)
+                    .all()
+                )
+                
+                incoming = (
+                    db.query(Order)
+                    .filter(Order.type == "internal_transfer")
+                    .filter(Order.shift_id == current_shift.id)
+                    .filter(Order.service_id == service.id)
+                    .filter(Order.received_amount > 0)
+                    .filter(Order.is_deleted == False)
+                    .all()
+                )
+
+                for o in outgoing:
+                    asset = db.query(Asset).get(o.given_asset_id)
+                    if asset:
+                        rate_rub = price_rub_for_symbol(asset.symbol)
+                        transfers_sum -= o.given_amount * rate_rub  # отрицательно
+
+                for o in incoming:
+                    asset = db.query(Asset).get(o.received_asset_id)
+                    if asset:
+                        rate_rub = price_rub_for_symbol(asset.symbol)
+                        transfers_sum += o.received_amount * rate_rub  # положительно
+
+            
+
         # --- рендер страницы ---
         return render_template(
             "index.html",
@@ -468,7 +509,8 @@ def index():
             current_profit=round(current_profit) if current_profit else 0,
             prev_profit=round(prev_profit) if prev_profit else 0,
             inputs_sum=round(inputs_sum) if inputs_sum else 0,
-            outputs_sum=round(outputs_sum) if outputs_sum else 0,
+            outputs_sum=round(outputs_sum) if outputs_sum else 0,  
+            transfers_sum=round(transfers_sum) if transfers_sum else 0, 
             page=page,
             total_pages=total_pages,
             top_assets=top_assets,
@@ -803,6 +845,24 @@ def internal_transfer():
 
     transfer_group = int(datetime.now(MSK).timestamp() * 1000)
 
+    # 🔹 находим активную смену у отправителя
+    # 🔹 находим активную смену у отправителя
+    current_shift_from = (
+        db.query(Shift)
+        .filter(Shift.service_id == from_service_id, Shift.end_time.is_(None))
+        .order_by(Shift.start_time.desc())
+        .first()
+    )
+
+    # 🔹 находим активную смену у получателя
+    current_shift_to = (
+        db.query(Shift)
+        .filter(Shift.service_id == to_service_id, Shift.end_time.is_(None))
+        .order_by(Shift.start_time.desc())
+        .first()
+    )
+
+    # --- списание ---
     from_balance = db.query(Balance).filter_by(service_id=from_service_id, asset_id=asset_id).first()
     if not from_balance:
         from_balance = Balance(service_id=from_service_id, asset_id=asset_id, amount=0)
@@ -811,14 +871,17 @@ def internal_transfer():
 
     old_from_amount = from_balance.amount
     from_balance.amount -= amount
-    db.add(BalanceHistory(
-        service_id=from_service_id,
-        asset_id=asset_id,
-        old_amount=old_from_amount,
-        new_amount=from_balance.amount,
-        change=-amount,
-    ))
+    db.add(
+        BalanceHistory(
+            service_id=from_service_id,
+            asset_id=asset_id,
+            old_amount=old_from_amount,
+            new_amount=from_balance.amount,
+            change=-amount,
+        )
+    )
 
+    # --- зачисление ---
     to_balance = db.query(Balance).filter_by(service_id=to_service_id, asset_id=asset_id).first()
     if not to_balance:
         to_balance = Balance(service_id=to_service_id, asset_id=asset_id, amount=0)
@@ -827,46 +890,48 @@ def internal_transfer():
 
     old_to_amount = to_balance.amount
     to_balance.amount += amount
-    db.add(BalanceHistory(
-        service_id=to_service_id,
-        asset_id=asset_id,
-        old_amount=old_to_amount,
-        new_amount=to_balance.amount,
-        change=amount,
-    ))
+    db.add(
+        BalanceHistory(
+            service_id=to_service_id,
+            asset_id=asset_id,
+            old_amount=old_to_amount,
+            new_amount=to_balance.amount,
+            change=amount,
+        )
+    )
 
+    # --- создаем ордера ---
     order_out = Order(
         service_id=from_service_id,
         user_id=user.id,
-        shift_id=None,
+        shift_id=current_shift_from.id if current_shift_from else None,  # смена отправителя
         type="internal_transfer",
         is_manual=True,
         given_asset_id=asset_id,
         given_amount=amount,
         transfer_group=transfer_group,
         comment=comment or f"Перевод {amount} актива в сервис {to_service_id}",
-        category_id=int(category_id) if category_id else None   # ✅ категория
+        category_id=int(category_id) if category_id else None,
     )
     db.add(order_out)
 
     order_in = Order(
         service_id=to_service_id,
         user_id=user.id,
-        shift_id=None,
+        shift_id=current_shift_to.id if current_shift_to else None,  # смена получателя
         type="internal_transfer",
         is_manual=True,
         received_asset_id=asset_id,
         received_amount=amount,
         transfer_group=transfer_group,
         comment=comment or f"Перевод {amount} актива из сервиса {from_service_id}",
-        category_id=int(category_id) if category_id else None   # ✅ категория
+        category_id=int(category_id) if category_id else None,
     )
     db.add(order_in)
 
     db.commit()
     db.close()
     return redirect(url_for("index"))
-
 
 
 
@@ -1227,6 +1292,43 @@ def delete_order(order_id):
 
     flash("✅ Ордер удалён", "success")
     return redirect(url_for("index"))
+
+# === ❌ Удалить внутренний перевод ===
+@app.route("/delete_transfer/<int:group_id>", methods=["POST"])
+def delete_transfer(group_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        # Находим обе стороны перевода (отправку и приём)
+        orders = db.query(Order).filter(
+            Order.transfer_group == group_id,
+            Order.type == "internal_transfer",
+            Order.is_deleted == False
+        ).all()
+
+        if len(orders) != 2:
+            flash("Ошибка: перевод не найден или уже удалён", "error")
+            return redirect(url_for("index"))
+
+        for o in orders:
+            o.is_deleted = True
+
+            # Восстанавливаем балансы
+            if o.received_asset_id:
+                bal = db.query(Balance).filter_by(service_id=o.service_id, asset_id=o.received_asset_id).first()
+                if bal:
+                    bal.amount -= o.received_amount
+            if o.given_asset_id:
+                bal = db.query(Balance).filter_by(service_id=o.service_id, asset_id=o.given_asset_id).first()
+                if bal:
+                    bal.amount += o.given_amount
+
+        db.commit()
+        flash("✅ Перевод между сервисами удалён", "success")
+
+    return redirect(url_for("index"))
+
 
 
 @app.route("/categories")

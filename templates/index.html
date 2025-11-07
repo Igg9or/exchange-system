@@ -169,6 +169,14 @@
           Выводы: {{ outputs_sum|format_number }} ₽
         </p>
 
+        <p>
+        Переводы между сервисами:
+        <span class="{% if transfers_sum >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+          {{ transfers_sum|format_number }} ₽
+        </span>
+      </p>
+
+
         <p class="text-gray-600 text-sm">
           Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽
         </p>
@@ -306,28 +314,33 @@
     <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td>
     <td class="p-2 border">
   {% if not o.is_deleted %}
-    {% if current_shift and o.shift_id == current_shift.id and o.user_id == user.id and o.type != "admin_io" %}
-      <!-- кнопка редактирования -->
-      <button type="button"
-              onclick="openEditOrderModal(
-                {{ o.id }},
-                '{{ o.comment or "" }}',
-                {{ o.received_amount or 0 }},
-                {{ o.given_amount or 0 }},
-                {{ o.received_asset_id or 'null' }},
-                {{ o.given_asset_id or 'null' }},
-                {{ o.category_id or 'null' }}
-              )"
-              class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">
-        ✏️ Редактировать
-      </button>
+{% if current_shift and o.shift_id == current_shift.id and o.user_id == user.id and o.type != "admin_io" and o.type != "internal_transfer" %}
+  <!-- кнопка редактирования -->
+  <button type="button"
+          onclick="openEditOrderModal(
+            {{ o.id }},
+            '{{ o.comment or "" }}',
+            {{ o.received_amount or 0 }},
+            {{ o.given_amount or 0 }},
+            {{ o.received_asset_id or 'null' }},
+            {{ o.given_asset_id or 'null' }},
+            {{ o.category_id or 'null' }}
+          )"
+          class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">
+    ✏️ Редактировать
+  </button>
+{% endif %}
 
-      <!-- кнопка удаления -->
-      <form action="{{ url_for('delete_order', order_id=o.id) }}" method="post" style="display:inline;">
-        <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
-      </form>
-      
-    {% endif %}
+{% if current_shift and o.shift_id == current_shift.id and o.user_id == user.id %}
+  <!-- кнопка удаления -->
+  <form action="{{ url_for('delete_order', order_id=o.id) }}" method="post" style="display:inline;">
+    <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">
+      Удалить
+    </button>
+  </form>
+{% endif %}
+     
+
 
     {# --- если это операция Внести/Вывести --- #}
     {% if o.type == "admin_io" and o.user_id == user.id %}
