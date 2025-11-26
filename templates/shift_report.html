@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Отчёт по смене</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-900">
+  <div class="container mx-auto p-6">
+
+    <h1 class="text-2xl font-bold mb-4">Отчёт по смене</h1>
+
+    {% if not shift %}
+      <p>Смен пока нет.</p>
+    {% else %}
+      <div class="bg-white p-4 rounded shadow mb-6">
+        <p><b>ID смены:</b> {{ shift.id }}</p>
+        <p><b>Начало:</b> {{ shift.start_time }}</p>
+        <p><b>Конец:</b> {{ shift.end_time or "ещё работает" }}</p>
+      </div>
+
+      <h2 class="text-xl font-semibold mb-2">Заявки</h2>
+      <table class="w-full border-collapse bg-white rounded shadow mb-6">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="px-3 py-2 border">ID</th>
+            <th class="px-3 py-2 border">Тип</th>
+            <th class="px-3 py-2 border">Получили</th>
+            <th class="px-3 py-2 border">Отдали</th>
+            <th class="px-3 py-2 border">Прибыль %</th>
+            <th class="px-3 py-2 border">Комментарий</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in orders %}
+          <tr>
+            <td class="px-3 py-2 border">{{ o.id }}</td>
+            <td class="px-3 py-2 border">{{ o.type }}</td>
+            <td class="px-3 py-2 border">{{ o.received_amount }} ({{ o.received_asset_id }})</td>
+            <td class="px-3 py-2 border">{{ o.given_amount }} ({{ o.given_asset_id }})</td>
+            <td class="px-3 py-2 border">{{ o.profit_percent }}%</td>
+            <td class="px-3 py-2 border">{{ o.comment }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h2 class="text-xl font-semibold mb-2">Балансы</h2>
+      <table class="w-full border-collapse bg-white rounded shadow">
+        <thead class="bg-gray-200">
+          <tr>
+            <th class="px-3 py-2 border">Актив</th>
+            <th class="px-3 py-2 border">Сумма</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b, asset in balances %}
+          <tr>
+            <td class="px-3 py-2 border">{{ asset.symbol }}</td>
+            <td class="px-3 py-2 border">{{ b.amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    <div class="mt-6">
+      <a href="{{ url_for('index') }}" class="bg-blue-600 text-white px-4 py-2 rounded">⬅ Назад</a>
+    </div>
+
+  </div>
+</body>
+</html>

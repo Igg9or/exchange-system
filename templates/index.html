@@ -1,0 +1,993 @@
+  <!DOCTYPE html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Crypto Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 text-gray-900">
+
+  <header class="bg-white shadow p-4 mb-4 flex justify-between items-center">
+    <div>
+      <span class="font-semibold">Привет, {{ user.login }}</span>
+      <span class="text-gray-500 text-sm"> ({{ user.role }})</span>
+    </div>
+    <div class="flex items-center gap-3">
+
+      {% if user.role == "admin" or user.role == "operator" %}
+<div style="padding:10px; background:#eef;">
+    <form method="POST" action="/set_manual_usdt_rate">
+        <label><b>Курс USDT → RUB:</b></label>
+        <input type="number" step="0.01" name="rate" value="{{ usdt_manual_rate or '' }}" placeholder="Например 94.30">
+        <button type="submit">Установить</button>
+    </form>
+</div>
+{% endif %}
+
+
+    {% if user.role == "admin" %}
+      <a href="{{ url_for('users_list') }}" class="bg-blue-500 text-white px-3 py-1 rounded">👥 Пользователи</a>
+      <a href="javascript:void(0)" onclick="document.getElementById('categoriesModal').classList.remove('hidden')"
+   class="bg-indigo-500 text-white px-3 py-1 rounded">📂 Категории</a>
+{% if user.role == "admin" %}
+  <a href="{{ url_for('admin_analytics') }}" class="btn btn-outline-primary mb-3">📊 Аналитика</a>
+{% endif %}
+      <form method="get" class="inline">
+        <select name="service_id" onchange="this.form.submit()" class="border px-2 py-1 rounded">
+          <option value="">Все сервисы</option>
+          {% for s in services %}
+            <option value="{{ s.id }}" {% if selected_service_id == s.id %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    {% endif %}
+
+    <!-- ✅ Кнопка доступна и админу, и оператору -->
+    <button type="button"
+            onclick="document.getElementById('adminIOModal').classList.remove('hidden')"
+            class="bg-purple-600 text-white px-3 py-1 rounded">💰 Внести/Вывести</button>
+            <button type="button"
+        onclick="document.getElementById('addAssetModal').classList.remove('hidden')"
+        class="bg-indigo-600 text-white px-3 py-1 rounded">
+  ➕ Добавить актив
+</button>
+
+    <a href="{{ url_for('logout') }}" class="bg-red-500 text-white px-3 py-1 rounded">Выйти</a>
+  </div>
+  </header>
+
+  <div class="container mx-auto px-4">
+
+
+  
+
+    <!-- Балансы -->
+<div id="balances" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 mb-4">
+  {% for balance, asset in balances %}
+    {% if asset.id in top_assets %}
+      <div class="p-2 rounded-lg shadow-sm flex flex-col items-center justify-center text-center border 
+                  transition hover:shadow-md bg-white">
+        
+        <!-- Иконка -->
+        <!-- Иконка + Название -->
+<div class="flex items-center justify-center gap-2 mb-1">
+  <div class="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-full">
+    {% if ICON_MAP.get(asset.symbol) %}
+      <img src="{{ ICON_MAP[asset.symbol] }}" alt="{{ asset.symbol }}" class="w-4 h-4"
+     onerror="this.outerHTML='<span class=\'text-sm\'>🔹</span>'">
+    {% else %}
+      <span class="text-sm">🔹</span>
+    {% endif %}
+  </div>
+  <div class="text-[12px] font-semibold text-gray-800">
+    {{ NAME_MAP.get(asset.symbol, asset.symbol) }}
+  </div>
+</div>
+
+<!-- Баланс -->
+<div class="text-base font-bold text-gray-900 tracking-tight">
+  {{ balance.amount|format_number }} {{ ALIAS.get(asset.symbol, asset.symbol) }}
+</div>
+
+
+
+        <!-- Кнопка -->
+        {% if user.role == "admin" %}
+          <button type="button"
+                  onclick="openSetBalanceModal({{ asset.id }}, '{{ asset.symbol }}', {{ balance.amount }})"
+                  class="mt-1 bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-[10px] hover:bg-gray-300">
+            ✏️
+          </button>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+
+
+
+<div class="flex justify-between items-center mb-2">
+  <h2 class="text-lg font-semibold">Активы</h2>
+  <button onclick="document.getElementById('editAssetsModal').classList.remove('hidden')"
+          class="bg-blue-600 text-white px-3 py-1 rounded">
+    ✏️ Редактировать
+  </button>
+</div>
+
+<!-- скрытые активы -->
+<div id="more-balances" class="hidden grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mb-4">
+  {% for balance, asset in balances %}
+    {% if asset.id not in top_assets %}
+      <div class="bg-white p-2 rounded shadow flex flex-col items-center text-xs">
+        <div class="text-lg">
+          {% if asset.symbol == "BTC" %} ₿
+          {% elif "USDT" in asset.symbol %} 💵
+          {% elif asset.symbol == "RUB" %} ₽
+          {% else %} 🔹
+          {% endif %}
+        </div>
+        <div class="font-medium text-[10px] text-center truncate w-full">{{ asset.symbol }}</div>
+        <div class="text-gray-600 text-xs w-full text-center break-all">
+  {{ balance.amount|trim_float }}
+</div>
+
+        {% if user.role == "admin" %}
+          <button type="button"
+                  onclick="openSetBalanceModal({{ asset.id }}, '{{ asset.symbol }}', {{ balance.amount }})"
+                  class="bg-orange-500 text-white px-2 py-0.5 mt-1 rounded text-[10px]">
+            ✏️ Изменить
+          </button>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<!-- кнопка -->
+<button onclick="document.getElementById('more-balances').classList.toggle('hidden')"
+        class="bg-gray-200 px-3 py-1 rounded text-sm">
+  Развернуть / Скрыть
+</button>
+
+ <!-- Панель смен -->
+<div class="bg-white p-4 rounded shadow mb-6 w-full">
+  <h2 class="text-lg font-semibold mb-3">Активная смена</h2>
+
+  {% if current_shift %}
+    <div class="flex justify-between items-start text-sm">
+      <div>
+        <p><b>Смена №:</b> {{ current_shift.number }}</p>
+        <p><b>Запустил:</b> {{ current_shift.user.login if current_shift.user else '-' }}</p>
+        <p><b>Время начала:</b>
+  {{ current_shift.start_time|to_moscow }}
+</p>
+      </div>
+      <div class="text-right">
+        <p class="font-semibold text-green-600">
+          Прибыль текущей смены: {{ current_profit|format_number }} ₽
+        </p>
+
+        <p class="text-gray-700 text-sm">
+          Вводы: {{ inputs_sum|format_number }} ₽
+        </p>
+        <p class="text-gray-700 text-sm">
+          Выводы: {{ outputs_sum|format_number }} ₽
+        </p>
+
+        <p class="text-gray-600 text-sm">
+          Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽
+        </p>
+      </div>
+    </div>
+  {% else %}
+    <p class="text-gray-600">Нет активной смены</p>
+  {% endif %}
+
+  <!-- Кнопки переключения смен -->
+  <div class="flex gap-3 mt-4">
+    {% for i in range(1,4) %}
+      <form action="{{ url_for('set_shift') }}" method="post" class="shift-form">
+        <input type="hidden" name="shift_number" value="{{ i }}">
+        <button type="button"
+          onclick="openShiftModal({{ i }}, this.form)"
+          class="px-4 py-1.5 rounded 
+                 {{ 'bg-green-500 text-white' if current_shift and current_shift.number == i else 'bg-gray-200' }}">
+          Смена {{ i }}
+        </button>
+      </form>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Фильтры -->
+<div class="bg-white p-3 rounded shadow flex justify-between items-center mb-4">
+  <form method="get" class="flex gap-2 items-center text-sm">
+    <select name="category_id" class="border px-2 py-1 rounded text-sm">
+      <option value="">Все категории</option>
+      {% for cat in categories %}
+        <option value="{{ cat.id }}" {% if request.args.get('category_id') == cat.id|string %}selected{% endif %}>
+          {{ cat.name }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <select name="asset_id" class="border px-2 py-1 rounded text-sm">
+      <option value="">Все активы</option>
+      {% for asset in assets %}
+        <option value="{{ asset.id }}" {% if request.args.get('asset_id') == asset.id|string %}selected{% endif %}>
+          {{ asset.symbol }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <select name="operator_id" class="border px-2 py-1 rounded text-sm">
+      <option value="">Все операторы</option>
+      {% for u in all_users %}
+        <option value="{{ u.id }}" {% if request.args.get('operator_id') == u.id|string %}selected{% endif %}>
+          {{ u.login }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <input type="text" name="comment" placeholder="Комментарий..." 
+           value="{{ request.args.get('comment','') }}"
+           class="border px-2 py-1 rounded text-sm">
+
+    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-sm">
+      Фильтровать
+    </button>
+  </form>
+
+  <div class="flex gap-2 items-center text-sm">
+    {% if current_shift %}
+      <a href="{{ url_for('index', my_shift=1, service_id=selected_service_id) }}"
+         class="bg-purple-600 text-white px-3 py-1 rounded text-sm">
+        📋 Моя смена
+      </a>
+    {% endif %}
+
+    <a href="{{ url_for('index', service_id=selected_service_id) }}"
+       class="bg-gray-300 text-black px-3 py-1 rounded text-sm">
+      🔄 Все
+    </a>
+
+    <button onclick="document.getElementById('transferModal').classList.remove('hidden')"
+        class="bg-green-600 text-white px-3 py-1 rounded text-sm">
+            Перевод
+          </button>
+
+          <!-- ✅ теперь и админ, и оператор могут добавлять обмен -->
+          <button onclick="document.getElementById('orderModal').classList.remove('hidden')"
+                  class="bg-blue-600 text-white px-3 py-1 rounded text-sm">
+            ➕ Обмен
+          </button>
+  </div>
+</div>
+
+    <!-- Таблица заявок -->
+    <div class="bg-white p-3 rounded shadow">
+    <table class="w-full text-sm border-collapse">
+      <thead>
+  <tr class="bg-gray-100">
+    <th class="p-2 border">ID</th>
+    <th class="p-2 border">Время</th>
+    <th class="p-2 border">Категория</th> <!-- 🔹 новая колонка -->
+    <th class="p-2 border">Оператор</th>
+    <th class="p-2 border">Получили</th>
+    <th class="p-2 border">Отдали</th>
+    <th class="p-2 border">Комментарий</th>
+    <th class="p-2 border">Прибыль (%)</th>
+    <th class="p-2 border">Прибыль (₽)</th>
+    <th class="p-2 border">Действия</th>
+  </tr>
+</thead>
+  <tbody>
+   {% for o in orders %}
+  <tr 
+    class="
+      {% if o.is_deleted %}bg-red-100 line-through
+      {% elif o.type == 'admin_io' %}bg-gray-200 hover:bg-gray-300
+      {% elif o.type == 'internal_transfer' %}bg-blue-50 hover:bg-blue-100
+      {% else %}hover:bg-gray-50
+      {% endif %}
+    "
+  >
+    <td class="p-2 border">{{ o.id }}</td>
+    <td class="p-2 border">
+      {{ o.created_at|to_moscow }}
+    </td>
+    <td class="p-2 border">
+      {{ o.category.name if o.category else '-' }}
+    </td>
+    <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
+    <td class="p-2 border text-green-600">
+      {{ o.received_amount|trim_float }} {{ o.received_asset.symbol if o.received_asset else '' }}
+    </td>
+    <td class="p-2 border text-red-600">
+      {{ o.given_amount|trim_float }} {{ o.given_asset.symbol if o.given_asset else '' }}
+    </td>
+    <td class="p-2 border">{{ o.comment }}</td>
+    <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
+    <td class="p-2 border">{{ "%.2f"|format(o.profit_rub or 0) }} ₽</td>
+    <td class="p-2 border">
+  {% if not o.is_deleted %}
+    {% if current_shift and o.shift_id == current_shift.id and o.user_id == user.id and o.type != "admin_io" %}
+      <!-- кнопка редактирования -->
+      <button type="button"
+              onclick="openEditOrderModal(
+                {{ o.id }},
+                '{{ o.comment or "" }}',
+                {{ o.received_amount or 0 }},
+                {{ o.given_amount or 0 }},
+                {{ o.received_asset_id or 'null' }},
+                {{ o.given_asset_id or 'null' }},
+                {{ o.category_id or 'null' }}
+              )"
+              class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">
+        ✏️ Редактировать
+      </button>
+
+      <!-- кнопка удаления -->
+      <form action="{{ url_for('delete_order', order_id=o.id) }}" method="post" style="display:inline;">
+        <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
+      </form>
+      
+    {% endif %}
+
+    {# --- если это операция Внести/Вывести --- #}
+    {% if o.type == "admin_io" and o.user_id == user.id %}
+      <button type="button"
+              onclick="openEditIOmodal({{ o.id }}, '{{ o.comment or "" }}', {{ o.amount or 0 }}, {{ o.asset_id or 'null' }}, '{{ o.direction }}')"
+              class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">
+        ✏️ Редактировать
+      </button>
+
+      <form action="{{ url_for('delete_io', io_id=o.id) }}" method="post" style="display:inline;">
+        <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
+      </form>
+    {% endif %}
+
+
+  {% else %}
+    <span class="text-red-600 text-xs">Удалён</span>
+  {% endif %}
+</td>
+  </tr>
+{% endfor %}
+</tbody>
+    </table>
+
+
+  </div>
+
+ {% set args = request.args.to_dict(flat=True) %}
+{% set _ = args.pop('page', None) %}
+{% set _ = args.pop('per_page', None) %}
+
+  <!-- ✅ Пагинация -->
+  <div class="flex justify-between items-center mt-4">
+
+  <!-- 🔹 Ввод per_page -->
+  <form method="get" class="flex items-center gap-2 text-sm">
+    {% for k,v in args.items() %}
+      <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <label>Строк на страницу:</label>
+    <input type="number" name="per_page" value="{{ per_page }}" min="5" max="200"
+           class="border px-2 py-1 rounded w-20 text-sm"
+           onchange="this.form.submit()">
+  </form>
+
+  <!-- 🔹 Нумерация страниц -->
+  <div class="flex gap-1">
+    {% if page > 1 %}
+      <a href="{{ url_for('index', page=page-1, per_page=per_page, **args) }}"
+         class="px-2 py-1 border rounded">«</a>
+    {% endif %}
+
+    {% for p in range(1, total_pages+1) %}
+      {% if p == page %}
+        <span class="px-2 py-1 border rounded bg-blue-500 text-white">{{ p }}</span>
+      {% elif p >= page-2 and p <= page+2 %}
+        <a href="{{ url_for('index', page=p, per_page=per_page, **args) }}"
+           class="px-2 py-1 border rounded">{{ p }}</a>
+      {% elif p == 1 or p == total_pages %}
+        <a href="{{ url_for('index', page=p, per_page=per_page, **args) }}"
+           class="px-2 py-1 border rounded">{{ p }}</a>
+        {% if p == 1 and page > 4 %}<span class="px-2">...</span>{% endif %}
+        {% if p == total_pages and page < total_pages-3 %}<span class="px-2">...</span>{% endif %}
+      {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+      <a href="{{ url_for('index', page=page+1, per_page=per_page, **args) }}"
+         class="px-2 py-1 border rounded">»</a>
+    {% endif %}
+  </div>
+
+  <!-- 🔹 Показано N из M -->
+  <div class="text-sm text-gray-600">
+    Показано {{ orders|length }} из {{ total_orders }}
+  </div>
+</div>
+
+  </div>
+
+  <!-- Модалка перевода -->
+  <div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded shadow w-96">
+      <h2 class="text-lg font-bold mb-3">Перевод между сервисами</h2>
+      <form action="{{ url_for('internal_transfer') }}" method="post" class="space-y-3">
+        <div>
+          <label class="block text-sm">Откуда</label>
+          <select name="from_service_id" class="border w-full px-2 py-1 rounded">
+            {% for s in services %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Куда</label>
+          <select name="to_service_id" class="border w-full px-2 py-1 rounded">
+            {% for s in services %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Актив</label>
+          <select name="asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма</label>
+          <input type="number" step="any" name="amount" class="border w-full px-2 py-1 rounded">
+        </div>
+        <div>
+          <label class="block text-sm">Комментарий</label>
+          <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        </div>
+        <div>
+        <label class="block text-sm">Категория</label>
+        <select name="category_id" class="border w-full px-2 py-1 rounded">
+          <option value="">Без категории</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('transferModal').classList.add('hidden')"
+                  class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+          <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">Перевести</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модалка: Добавить заявку -->
+  <div id="orderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded shadow w-96">
+      <h2 class="text-lg font-bold mb-3">Новая заявка</h2>
+      <form action="{{ url_for('add_order') }}" method="post" class="space-y-3">
+        
+        <!-- Получаем -->
+        <div>
+          <label class="block text-sm">Получаем (Актив)</label>
+          <select name="received_asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма получаем</label>
+          <input type="number" step="any" name="received_amount" class="border w-full px-2 py-1 rounded" required>
+        </div>
+
+        <!-- Отдаём -->
+        <div>
+          <label class="block text-sm">Отдаём (Актив)</label>
+          <select name="given_asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма отдаём</label>
+          <input type="number" step="any" name="given_amount" class="border w-full px-2 py-1 rounded" required>
+        </div>
+
+        <!-- Комментарий -->
+        <div>
+          <label class="block text-sm">Комментарий</label>
+          <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        </div>
+
+        <div>
+          <label class="block text-sm">Категория</label>
+          <select name="category_id" class="border w-full px-2 py-1 rounded">
+            <option value="">Без категории</option>
+            {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Кнопки -->
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('orderModal').classList.add('hidden')"
+                  class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+          <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Добавить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="adminIOModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded shadow w-96">
+      <h2 class="text-lg font-bold mb-3">Админ: Внести / Вывести актив</h2>
+      <form action="{{ url_for('admin_io') }}" method="post" class="space-y-3">
+        <div>
+          <label class="block text-sm">Сервис</label>
+          <select name="service_id" class="border w-full px-2 py-1 rounded">
+            {% for s in services %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Актив</label>
+          <select name="asset_id" class="border w-full px-2 py-1 rounded">
+            {% for asset in assets %}
+              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Направление</label>
+          <select name="direction" class="border w-full px-2 py-1 rounded">
+            <option value="in">Внести</option>
+            <option value="out">Вывести</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm">Сумма</label>
+          <input type="number" step="any" name="amount" required class="border w-full px-2 py-1 rounded">
+        </div>
+        <div>
+          <label class="block text-sm">Комментарий</label>
+          <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+        </div>
+        
+        <!-- 🔹 Новое поле Категория -->
+        <div>
+          <label class="block text-sm">Категория</label>
+          <select name="category_id" class="border w-full px-2 py-1 rounded">
+            <option value="">Без категории</option>
+            {% for cat in categories %}
+              <option value="{{ cat.id }}">{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" onclick="document.getElementById('adminIOModal').classList.add('hidden')"
+                  class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+          <button type="submit" class="bg-purple-600 text-white px-3 py-1 rounded">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<div id="shiftConfirmModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Подтверждение смены</h2>
+    <p id="shiftModalText" class="mb-4 text-gray-700">Вы уверены?</p>
+    <div class="flex justify-end gap-2">
+      <button type="button" onclick="closeShiftModal()"
+              class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+      <button id="shiftConfirmBtn" type="button"
+              class="bg-red-600 text-white px-3 py-1 rounded">Подтвердить</button>
+    </div>
+  </div>
+</div>
+
+<div id="addAssetModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Добавить новый актив</h2>
+    <form action="{{ url_for('add_asset') }}" method="post" class="space-y-3">
+      <div>
+        <label class="block text-sm">Сервис</label>
+        <select name="service_id" class="border w-full px-2 py-1 rounded" required>
+          {% for s in services %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Символ</label>
+        <input type="text" name="symbol" class="border w-full px-2 py-1 rounded" required placeholder="Например: USDT TRC-20">
+      </div>
+      <div>
+        <label class="block text-sm">Название</label>
+        <input type="text" name="name" class="border w-full px-2 py-1 rounded" required placeholder="Например: Tether TRC-20">
+      </div>
+      <div>
+  <label class="block text-sm">Торговая пара (API)</label>
+  <select id="pairSelect" name="pair_symbol" class="border w-full px-2 py-1 rounded">
+    <option value="">Авто (SYMBOLUSDT)</option>
+  </select>
+</div>
+
+<div>
+  <label class="block text-sm">Фиксированный курс (₽, опционально)</label>
+  <input type="number" step="any" name="manual_rate"
+         class="border w-full px-2 py-1 rounded"
+         placeholder="Например: 1.0 для RUB">
+</div>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('addAssetModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-indigo-600 text-white px-3 py-1 rounded">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div id="editAssetsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+  <!-- контейнер, который можно скроллить -->
+  <div class="max-h-[90vh] overflow-y-auto bg-white rounded-lg shadow-lg w-[800px] p-6">
+    <h2 class="text-xl font-bold mb-4">Редактирование активов</h2>
+    <p class="text-sm text-gray-600 mb-4">Перетащите активы между колонками, чтобы настроить «Основные» и «Резервные».</p>
+
+    <div class="grid grid-cols-2 gap-6">
+      <!-- Основные -->
+      <div>
+        <h3 class="font-semibold mb-2">Основные активы</h3>
+        <ul id="mainAssets" class="min-h-[300px] border rounded p-2 bg-gray-50 space-y-2">
+          {% for balance, asset in balances if asset.id in top_assets %}
+          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between items-center">
+  <span>{{ NAME_MAP.get(asset.symbol, asset.symbol) }}</span>
+  <div class="flex gap-2 items-center">
+    <div class="text-gray-600 text-xs">{{ balance.amount|trim_float }}</div>
+
+    <!-- Кнопка удалить -->
+    {% if user.role == "admin" %}
+  <form action="{{ url_for('delete_asset', asset_id=asset.id) }}" method="post"
+        onsubmit="return confirm('Удалить актив {{ NAME_MAP.get(asset.symbol, asset.symbol) }}?');">
+    <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">🗑 Удалить</button>
+  </form>
+{% endif %}
+  </div>
+</li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Резервные -->
+      <div>
+        <h3 class="font-semibold mb-2">Резервные активы</h3>
+        <ul id="reserveAssets" class="min-h-[300px] border rounded p-2 bg-gray-50 space-y-2">
+          {% for balance, asset in balances if asset.id not in top_assets %}
+          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between">
+            <span>{{ asset.symbol }}</span>
+            <div class="text-gray-600 text-xs w-full text-center break-all">
+  {{ balance.amount|trim_float }}
+</div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Кнопки -->
+    <div class="flex justify-end gap-3 mt-6">
+      <button onclick="document.getElementById('editAssetsModal').classList.add('hidden')"
+              class="px-4 py-2 rounded bg-gray-300">Отмена</button>
+      <button onclick="saveAssets()"
+              class="px-4 py-2 rounded bg-blue-600 text-white">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="categoriesModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-[500px]">
+    <h2 class="text-lg font-bold mb-3">Категории обменов</h2>
+
+    <!-- форма добавления -->
+    <form action="{{ url_for('add_category') }}" method="post" class="flex gap-2 mb-4">
+      <input type="text" name="name" placeholder="Новая категория"
+             class="border px-2 py-1 rounded w-full" required>
+      <button type="submit" class="bg-blue-600 text-white px-3 py-1 rounded">Добавить</button>
+    </form>
+
+    <!-- таблица категорий -->
+    <table class="w-full text-sm border-collapse mb-4">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="p-2 border">ID</th>
+          <th class="p-2 border">Название</th>
+          <th class="p-2 border">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cat in categories %}
+        <tr>
+          <td class="p-2 border">{{ cat.id }}</td>
+          <td class="p-2 border">{{ cat.name }}</td>
+          <td class="p-2 border">
+            <form action="{{ url_for('delete_category', category_id=cat.id) }}" method="post" style="display:inline;">
+              <button type="submit" class="bg-red-500 text-white px-2 py-1 rounded text-xs">Удалить</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- кнопки -->
+    <div class="flex justify-end">
+      <button type="button" onclick="document.getElementById('categoriesModal').classList.add('hidden')"
+              class="bg-gray-300 px-3 py-1 rounded">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div id="setBalanceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Корректировка баланса</h2>
+    <form action="{{ url_for('admin_set_balance') }}" method="post" class="space-y-3">
+      <input type="hidden" name="service_id" value="{{ selected_service_id or user.service_id }}">
+      <input type="hidden" id="setBalanceAssetId" name="asset_id">
+
+      <div>
+        <label class="block text-sm">Актив</label>
+        <input type="text" id="setBalanceAssetName" disabled class="border w-full px-2 py-1 rounded bg-gray-100">
+      </div>
+
+      <div>
+        <label class="block text-sm">Новое значение</label>
+        <input type="number" step="any" id="setBalanceAmount" name="amount" required class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('setBalanceModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-orange-600 text-white px-3 py-1 rounded">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<div id="editOrderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Редактировать заявку</h2>
+    <form id="editOrderForm" method="post" class="space-y-3">
+      <input type="hidden" name="order_id" id="editOrderId">
+
+      <!-- Получаем -->
+      <div>
+        <label class="block text-sm">Получаем (Актив)</label>
+        <select name="received_asset_id" id="editReceivedAsset" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Сумма получаем</label>
+        <input type="number" step="any" name="received_amount" id="editReceivedAmount" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <!-- Отдаём -->
+      <div>
+        <label class="block text-sm">Отдаём (Актив)</label>
+        <select name="given_asset_id" id="editGivenAsset" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm">Сумма отдаём</label>
+        <input type="number" step="any" name="given_amount" id="editGivenAmount" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <!-- Категория -->
+      <div>
+        <label class="block text-sm">Категория</label>
+        <select name="category_id" id="editCategory" class="border w-full px-2 py-1 rounded">
+          <option value="">Без категории</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Комментарий -->
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" id="editOrderComment" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <!-- Кнопки -->
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('editOrderModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-yellow-600 text-white px-3 py-1 rounded">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+<div id="editIOModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-3">Редактировать Внести/Вывести</h2>
+    <form id="editIOForm" method="post" class="space-y-3">
+      <input type="hidden" name="io_id" id="editIOId">
+
+      <div>
+        <label class="block text-sm">Актив</label>
+        <select name="asset_id" id="editIOAsset" class="border w-full px-2 py-1 rounded">
+          {% for asset in assets %}
+            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm">Сумма</label>
+        <input type="number" step="any" name="amount" id="editIOAmount" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div>
+        <label class="block text-sm">Направление</label>
+        <select name="direction" id="editIODirection" class="border w-full px-2 py-1 rounded">
+          <option value="in">Внести</option>
+          <option value="out">Вывести</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm">Комментарий</label>
+        <input type="text" name="comment" id="editIOComment" class="border w-full px-2 py-1 rounded">
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="document.getElementById('editIOModal').classList.add('hidden')"
+                class="bg-gray-300 px-3 py-1 rounded">Отмена</button>
+        <button type="submit" class="bg-yellow-600 text-white px-3 py-1 rounded">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+  // === ваш код для смен ===
+  let targetForm = null;
+
+  function openShiftModal(shiftNumber, form) {
+    targetForm = form;
+    document.getElementById('shiftModalText').innerText =
+      `⚠️ Вы уверены, что хотите закрыть текущую смену и открыть смену ${shiftNumber}?`;
+    document.getElementById('shiftConfirmModal').classList.remove('hidden');
+  }
+
+  function closeShiftModal() {
+    document.getElementById('shiftConfirmModal').classList.add('hidden');
+    targetForm = null;
+  }
+
+  document.getElementById('shiftConfirmBtn').addEventListener('click', () => {
+    if (targetForm) {
+      targetForm.submit();
+    }
+  });
+
+  // === новый код для редактирования активов ===
+  new Sortable(document.getElementById('mainAssets'), { group: 'assets', animation: 150 });
+  new Sortable(document.getElementById('reserveAssets'), { group: 'assets', animation: 150 });
+
+  function saveAssets() {
+    const mainIds = Array.from(document.querySelectorAll('#mainAssets li')).map(li => li.dataset.id);
+    fetch("{{ url_for('update_top_assets') }}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ main_assets: mainIds })
+    }).then(r => {
+      if (r.ok) {
+        location.reload();
+      } else {
+        alert("Ошибка при сохранении");
+      }
+    });
+  }
+
+document.addEventListener("DOMContentLoaded", () => {
+  const select = document.getElementById("pairSelect");
+  if (!select) return;
+
+  fetch("/api/pairs")
+    .then(r => r.json())
+    .then(data => {
+      select.innerHTML = "<option value=''>Авто (SYMBOLUSDT)</option>";
+      data.slice(0, 500).forEach(symbol => {  // ограничим до 500
+        const opt = document.createElement("option");
+        opt.value = symbol;
+        opt.textContent = symbol;
+        select.appendChild(opt);
+      });
+    })
+    .catch(() => {
+      select.innerHTML = "<option value=''>Ошибка загрузки</option>";
+    });
+});
+
+function openSetBalanceModal(assetId, assetName, amount) {
+    document.getElementById("setBalanceAssetId").value = assetId;
+    document.getElementById("setBalanceAssetName").value = assetName;
+    document.getElementById("setBalanceAmount").value = amount;
+    document.getElementById("setBalanceModal").classList.remove("hidden");
+}
+
+function openEditOrderModal(id, comment, receivedAmount, givenAmount, receivedAssetId, givenAssetId, categoryId) {
+  document.getElementById('editOrderId').value = id;
+  document.getElementById('editOrderComment').value = comment;
+  document.getElementById('editReceivedAmount').value = receivedAmount;
+  document.getElementById('editGivenAmount').value = givenAmount;
+
+  // активы
+  document.getElementById('editReceivedAsset').value = receivedAssetId;
+  document.getElementById('editGivenAsset').value = givenAssetId;
+
+  // категория
+  if (categoryId) {
+    document.getElementById('editCategory').value = categoryId;
+  } else {
+    document.getElementById('editCategory').value = "";
+  }
+
+  // экшен
+  document.getElementById('editOrderForm').action = "/edit_order/" + id;
+  document.getElementById('editOrderModal').classList.remove('hidden');
+}
+
+
+function openEditIOmodal(id, comment, amount, assetId, direction) {
+  document.getElementById('editIOId').value = id;
+  document.getElementById('editIOComment').value = comment;
+  document.getElementById('editIOAmount').value = amount;
+  document.getElementById('editIOAsset').value = assetId;
+  document.getElementById('editIODirection').value = direction;
+
+  document.getElementById('editIOForm').action = "/edit_io/" + id;
+  document.getElementById('editIOModal').classList.remove('hidden');
+}
+
+
+</script>
+
+
+  </body>
+  </html>

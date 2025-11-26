@@ -1,0 +1,39 @@
+02.10 БД
+ALTER TABLE balances
+    DROP CONSTRAINT balances_asset_id_fkey,
+    ADD CONSTRAINT balances_asset_id_fkey
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE orders
+    DROP CONSTRAINT orders_received_asset_id_fkey,
+    ADD CONSTRAINT orders_received_asset_id_fkey
+    FOREIGN KEY (received_asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE orders
+    DROP CONSTRAINT orders_given_asset_id_fkey,
+    ADD CONSTRAINT orders_given_asset_id_fkey
+    FOREIGN KEY (given_asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE orders
+    DROP CONSTRAINT orders_asset_id_fkey,
+    ADD CONSTRAINT orders_asset_id_fkey
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+ALTER TABLE balances_history
+    DROP CONSTRAINT balances_history_asset_id_fkey,
+    ADD CONSTRAINT balances_history_asset_id_fkey
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL;
+
+
+psql -U postgres -h localhost -d exchange_db
+
+
+    cd /home/moonlightexchanger.com_sarg-www/new_project/exchange-system
+
+git pull
+git fetch origin
+git reset --hard origin/main
+ps aux | grep gunicorn
+pkill gunicorn
+kill -9
+/home/moonlightexchanger.com_sarg-www/new_project/venv/bin/gunicorn -w 4 -b 127.0.0.1:8001 main:app -D 
