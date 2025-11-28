@@ -1792,6 +1792,109 @@ def set_manual_usdt_rate():
     flash(f"Установлен ручной курс: {rate} ₽", "success")
     return redirect(url_for("index"))
 
+@app.post("/delete_transfer/<int:order_id>")
+def delete_transfer(order_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    with get_db() as db:
+        order = db.query(Order).filter(Order.id == order_id).first()
+
+        if not order:
+            flash("Перевод не найден", "error")
+            return redirect(url_for("index"))
+
+        if order.is_deleted:
+            flash("Перевод уже удалён", "warning")
+            return redirect(url_for("index"))
+
+        if order.type != "internal_transfer":
+            flash("Это не перевод между сервисами", "error")
+            return redirect(url_for("index"))
+
+        # Находим ВСЕ ордера этой группы перевода
+        transfer_orders = db.query(Order).filter(
+            Order.transfer_group == order.transfer_group,
+            Order.is_deleted == False
+        ).all()
+
+        if len(transfer_orders) != 2:
+            flash("Ошибка: некорректная группа перевода", "error")
+            return redirect(url_for("index"))
+
+        # Определяем from_service и to_service
+        from_order = None
+        to_order = None
+        
+        for o in transfer_orders:
+            if o.given_asset_id and o.given_amount > 0:  # исходящий
+                from_order = o
+            elif o.received_asset_id and o.received_amount > 0:  # входящий
+                to_order = o
+
+        if not from_order or not to_order:
+            flash("Ошибка: не удалось определить направление перевода", "error")
+            return redirect(url_for("index"))
+
+        from_service_id = from_order.service_id
+        to_service_id = to_order.service_id
+        asset_id = from_order.given_asset_id
+        amount = from_order.given_amount
+
+        # Проверяем, что asset_id совпадает
+        if asset_id != to_order.received_asset_id or amount != to_order.received_amount:
+            flash("Ошибка: несоответствие данных перевода", "error")
+            return redirect(url_for("index"))
+
+        # ---- Откатываем баланс на сервисе получателя ----
+        bal_to = db.query(Balance).filter(
+            Balance.service_id == to_service_id,
+            Balance.asset_id == asset_id
+        ).first()
+
+        if bal_to:
+            bal_to.amount -= amount
+
+        # ---- Возвращаем деньги на сервис отправителя ----
+        bal_from = db.query(Balance).filter(
+            Balance.service_id == from_service_id,
+            Balance.asset_id == asset_id
+        ).first()
+
+        if bal_from:
+            bal_from.amount += amount
+
+        # ---- Помечаем ОБА перевода как удаленные ----
+        for o in transfer_orders:
+            o.is_deleted = True
+
+        # ---- Добавляем записи в историю балансов ----
+        if bal_from:
+            bh1 = BalanceHistory(
+                service_id=from_service_id,
+                asset_id=asset_id,
+                order_id=order.id,
+                old_amount=(bal_from.amount - amount),
+                new_amount=bal_from.amount,
+                change=amount
+            )
+            db.add(bh1)
+
+        if bal_to:
+            bh2 = BalanceHistory(
+                service_id=to_service_id,
+                asset_id=asset_id,
+                order_id=order.id,
+                old_amount=(bal_to.amount + amount),
+                new_amount=bal_to.amount,
+                change=-amount
+            )
+            db.add(bh2)
+
+        db.commit()
+
+    flash("Перевод успешно удалён", "success")
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":

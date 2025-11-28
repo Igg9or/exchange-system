@@ -351,6 +351,18 @@
       </form>
     {% endif %}
 
+    {% if o.type == "internal_transfer" %}
+    <form action="{{ url_for('delete_transfer', order_id=o.id) }}"
+          method="post"
+          style="display:inline;">
+        <button type="submit"
+                class="bg-red-600 text-white px-2 py-1 rounded text-xs">
+            ❌ Удалить перевод
+        </button>
+    </form>
+{% endif %}
+
+
 
   {% else %}
     <span class="text-red-600 text-xs">Удалён</span>
