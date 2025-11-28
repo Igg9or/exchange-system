@@ -178,6 +178,13 @@
           Выводы: {{ outputs_sum|format_number }} ₽
         </p>
 
+        <p class="text-gray-700 text-sm">
+  Переводы между сервисами:
+  <span class="{% if transfers_sum < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+    {{ transfers_sum|format_number }} ₽
+  </span>
+</p>
+
         <p class="text-gray-600 text-sm">
           Предыдущая смена: {{ "%.2f"|format(prev_profit) }} ₽
         </p>
