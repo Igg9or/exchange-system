@@ -501,10 +501,13 @@
         <div>
           <label class="block text-sm">Получаем (Актив)</label>
           <select name="received_asset_id" class="border w-full px-2 py-1 rounded">
-            {% for asset in assets %}
-              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-            {% endfor %}
-          </select>
+  {% for asset in assets %}
+    <option value="{{ asset.id }}" 
+            {% if asset.symbol == "USDT" %}selected{% endif %}>
+      {{ asset.symbol }}
+    </option>
+  {% endfor %}
+</select>
         </div>
         <div>
           <label class="block text-sm">Сумма получаем</label>
@@ -515,10 +518,13 @@
         <div>
           <label class="block text-sm">Отдаём (Актив)</label>
           <select name="given_asset_id" class="border w-full px-2 py-1 rounded">
-            {% for asset in assets %}
-              <option value="{{ asset.id }}">{{ asset.symbol }}</option>
-            {% endfor %}
-          </select>
+  {% for asset in assets %}
+    <option value="{{ asset.id }}" 
+            {% if asset.symbol == "USDT" %}selected{% endif %}>
+      {{ asset.symbol }}
+    </option>
+  {% endfor %}
+</select>
         </div>
         <div>
           <label class="block text-sm">Сумма отдаём</label>
