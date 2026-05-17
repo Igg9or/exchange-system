@@ -85,8 +85,9 @@
         <!-- Иконка + Название -->
 <div class="flex items-center justify-center gap-2 mb-1">
   <div class="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-full">
-    {% if ICON_MAP.get(asset.symbol) %}
-      <img src="{{ ICON_MAP[asset.symbol] }}" alt="{{ asset.symbol }}" class="w-4 h-4"
+    {% set icon_url = asset_icon_url(asset) %}
+    {% if icon_url %}
+      <img src="{{ icon_url }}" alt="{{ asset.symbol }}" class="w-4 h-4"
      onerror="this.outerHTML='<span class=\'text-sm\'>🔹</span>'">
     {% else %}
       <span class="text-sm">🔹</span>
@@ -691,9 +692,23 @@
         <ul id="mainAssets" class="min-h-[300px] border rounded p-2 bg-gray-50 space-y-2">
           {% for balance, asset in balances if asset.id in top_assets %}
           <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between items-center">
-  <span>{{ NAME_MAP.get(asset.symbol, asset.symbol) }}</span>
+  <div class="flex items-center gap-3 min-w-0">
+    <div class="asset-icon-preview">
+      {% set icon_url = asset_icon_url(asset) %}
+      {% if icon_url %}
+        <img src="{{ icon_url }}" alt="{{ asset.symbol }}">
+      {% else %}
+        <span>◆</span>
+      {% endif %}
+    </div>
+    <span class="truncate">{{ NAME_MAP.get(asset.symbol, asset.symbol) }}</span>
+  </div>
   <div class="flex gap-2 items-center">
     <div class="text-gray-600 text-xs">{{ balance.amount|trim_float }}</div>
+    <form action="{{ url_for('upload_asset_icon', asset_id=asset.id) }}" method="post" enctype="multipart/form-data" class="icon-upload-form">
+      <input id="assetIconMain{{ asset.id }}" type="file" name="icon" accept="image/png,image/jpeg,image/webp" onchange="this.form.submit()">
+      <label for="assetIconMain{{ asset.id }}">Иконка</label>
+    </form>
 
     <!-- Кнопка удалить -->
     {% if user.role == "admin" %}
@@ -713,11 +728,25 @@
         <h3 class="font-semibold mb-2">Резервные активы</h3>
         <ul id="reserveAssets" class="min-h-[300px] border rounded p-2 bg-gray-50 space-y-2">
           {% for balance, asset in balances if asset.id not in top_assets %}
-          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between">
-            <span>{{ asset.symbol }}</span>
+          <li data-id="{{ asset.id }}" class="cursor-move bg-white shadow rounded px-3 py-2 flex justify-between items-center">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="asset-icon-preview">
+                {% set icon_url = asset_icon_url(asset) %}
+                {% if icon_url %}
+                  <img src="{{ icon_url }}" alt="{{ asset.symbol }}">
+                {% else %}
+                  <span>◆</span>
+                {% endif %}
+              </div>
+              <span class="truncate">{{ asset.symbol }}</span>
+            </div>
             <div class="text-gray-600 text-xs w-full text-center break-all">
   {{ balance.amount|trim_float }}
 </div>
+            <form action="{{ url_for('upload_asset_icon', asset_id=asset.id) }}" method="post" enctype="multipart/form-data" class="icon-upload-form">
+              <input id="assetIconReserve{{ asset.id }}" type="file" name="icon" accept="image/png,image/jpeg,image/webp" onchange="this.form.submit()">
+              <label for="assetIconReserve{{ asset.id }}">Иконка</label>
+            </form>
           </li>
           {% endfor %}
         </ul>
