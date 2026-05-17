@@ -1,121 +1,542 @@
-/* --- Общие --- */
-body {
-  font-family: 'Inter', sans-serif;
+:root {
+  color-scheme: dark;
+  --page: #0f1216;
+  --page-2: #171b21;
+  --panel: rgba(31, 34, 40, 0.94);
+  --panel-strong: rgba(38, 42, 49, 0.97);
+  --panel-soft: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.12);
+  --line-strong: rgba(255, 255, 255, 0.2);
+  --text: #f5f5f7;
+  --muted: #a8abb4;
+  --muted-2: #777b86;
+  --blue: #4f6f97;
+  --cyan: #4d7c7a;
+  --pink: #4b5563;
+  --purple: #475569;
+  --green: #17b884;
+  --red: #d0525f;
+  --amber: #f1a33c;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  --radius: 8px;
+  --field: rgba(255, 255, 255, 0.065);
 }
 
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 0.75rem;
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #edf3f1;
+  --page-2: #f7f8f5;
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-strong: rgba(255, 255, 255, 0.96);
+  --panel-soft: rgba(13, 84, 76, 0.055);
+  --line: rgba(25, 30, 45, 0.12);
+  --line-strong: rgba(25, 30, 45, 0.18);
+  --text: #16181d;
+  --muted: #626875;
+  --muted-2: #8a909c;
+  --blue: #295c74;
+  --cyan: #0f766e;
+  --purple: #425466;
+  --green: #0fa77a;
+  --amber: #b87721;
+  --shadow: 0 22px 60px rgba(40, 50, 80, 0.12);
+  --field: rgba(255, 255, 255, 0.84);
 }
 
-/* --- Таблица --- */
-.custom-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+* {
+  scrollbar-color: var(--line-strong) transparent;
 }
 
-.custom-table th {
-  background: #f9fafb;
-  padding: 0.75rem;
-  text-align: left;
-  font-weight: 600;
-  font-size: 0.875rem;
-  border-bottom: 1px solid #e5e7eb;
+body.suf-app {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 12% -8%, rgba(23, 184, 132, 0.12), transparent 32rem),
+    radial-gradient(circle at 92% 4%, rgba(79, 111, 151, 0.12), transparent 30rem),
+    linear-gradient(135deg, var(--page), var(--page-2)) !important;
+  color: var(--text) !important;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
 }
 
-.custom-table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 0.875rem;
+.suf-app .container,
+.suf-app .container-fluid {
+  max-width: 1480px;
 }
 
-/* --- Пагинация --- */
-.pagination {
+.suf-app header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 16px auto 18px;
+  width: min(1480px, calc(100% - 32px));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel) !important;
+  box-shadow: var(--shadow) !important;
+  backdrop-filter: blur(24px);
+}
+
+:root[data-theme="light"] .suf-app header {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 248, 245, 0.9)) !important;
+  border-color: rgba(13, 84, 76, 0.12) !important;
+}
+
+.suf-app header > div:first-child {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 1rem;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.page-btn {
-  background: #3b82f6;
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  text-decoration: none;
-  transition: 0.2s;
+.suf-app header div[style*="background"] {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
 }
 
-.page-btn:hover {
-  background: #2563eb;
-}
-
-.page-current {
-  font-size: 0.875rem;
-  color: #374151;
-}
-
-/* --- Табы --- */
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.tab-btn {
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  background: #f3f4f6;
-  color: #374151;
-  font-weight: 500;
-  transition: 0.2s;
-}
-
-.tab-btn:hover {
-  background: #e5e7eb;
-}
-
-.tab-btn.active {
-  background: #3b82f6;
-  color: white;
-}
-
-/* --- Карточки активов --- */
-.asset-card {
-  background: white;
-  border-radius: 0.75rem;
-  padding: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: transform 0.15s ease;
-}
-
-.asset-card:hover {
-  transform: translateY(-2px);
-}
-
-.asset-icon {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 9999px;
+.suf-app header div[style*="background"] form {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.suf-app header div[style*="background"] label {
+  margin: 0;
+  font-size: 13px;
   font-weight: 700;
-  color: white;
-  font-size: 1.1rem;
+  color: var(--muted) !important;
 }
 
-/* --- Цвета для активов --- */
-.asset-btc { background: #f59e0b; }   /* оранжевый */
-.asset-usdt { background: #10b981; }  /* зелёный */
-.asset-rub { background: #3b82f6; }   /* синий */
-.asset-default { background: #6b7280; } /* серый */
+.suf-app header div[style*="background"] input {
+  width: 190px;
+}
+
+.suf-app header .font-semibold,
+.suf-app h1,
+.suf-app h2,
+.suf-app h3,
+.suf-app h4,
+.suf-app h5,
+.suf-app h6 {
+  color: var(--text) !important;
+  font-weight: 720;
+  letter-spacing: 0;
+}
+
+.suf-app .text-gray-500,
+.suf-app .text-gray-600,
+.suf-app .text-gray-700,
+.suf-app .text-muted,
+.suf-app label,
+.suf-app .form-label {
+  color: var(--muted) !important;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.theme-toggle__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--green), #526071);
+  box-shadow: 0 0 16px rgba(23, 184, 132, 0.32);
+}
+
+:root[data-theme="light"] .theme-toggle {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(13, 84, 76, 0.16);
+}
+
+:root[data-theme="light"] .theme-toggle__dot {
+  background: linear-gradient(135deg, #0f766e, #18b986);
+  box-shadow: 0 0 14px rgba(15, 118, 110, 0.28);
+}
+
+.theme-toggle--floating {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 60;
+  box-shadow: var(--shadow);
+}
+
+.suf-app .bg-white,
+.suf-app .card,
+.suf-app .modal-content,
+.suf-app form.bg-white {
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow) !important;
+  backdrop-filter: blur(22px);
+}
+
+.suf-app .bg-gray-100,
+.suf-app .bg-gray-50,
+.suf-app .bg-light {
+  background: transparent !important;
+}
+
+.suf-app .bg-gray-200,
+.suf-app .bg-gray-300,
+.suf-app .table-light,
+.suf-app thead.bg-gray-200,
+.suf-app tr.bg-gray-100 {
+  background: var(--panel-soft) !important;
+  color: var(--text) !important;
+}
+
+.suf-app .rounded,
+.suf-app .rounded-lg,
+.suf-app .shadow,
+.suf-app .shadow-sm,
+.suf-app .shadow-lg {
+  border-radius: var(--radius) !important;
+  box-shadow: none !important;
+}
+
+.suf-app input,
+.suf-app select,
+.suf-app textarea,
+.suf-app .form-control,
+.suf-app .form-select {
+  min-height: 38px;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--radius) !important;
+  background: var(--field) !important;
+  color: var(--text) !important;
+  outline: none !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05) !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.suf-app input:focus,
+.suf-app select:focus,
+.suf-app textarea:focus,
+.suf-app .form-control:focus,
+.suf-app .form-select:focus {
+  border-color: rgba(63, 125, 246, 0.72) !important;
+  box-shadow: 0 0 0 3px rgba(63, 125, 246, 0.18) !important;
+}
+
+:root[data-theme="light"] .suf-app input:focus,
+:root[data-theme="light"] .suf-app select:focus,
+:root[data-theme="light"] .suf-app textarea:focus,
+:root[data-theme="light"] .suf-app .form-control:focus,
+:root[data-theme="light"] .suf-app .form-select:focus {
+  border-color: rgba(15, 118, 110, 0.58) !important;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14) !important;
+}
+
+.suf-app input::placeholder {
+  color: var(--muted-2) !important;
+}
+
+.suf-app button,
+.suf-app a[class*="bg-"],
+.suf-app .btn {
+  min-height: 34px;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0;
+  transition: transform 0.16s ease, filter 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.suf-app button:hover,
+.suf-app a[class*="bg-"]:hover,
+.suf-app .btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.suf-app .bg-blue-500,
+.suf-app .bg-blue-600,
+.suf-app .bg-indigo-500,
+.suf-app .bg-indigo-600,
+.suf-app .bg-purple-600,
+.suf-app .btn-primary,
+.suf-app .page-current,
+.suf-app .page-btn {
+  background: linear-gradient(135deg, #3f4855, #2d333d) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important;
+}
+
+:root[data-theme="light"] .suf-app .bg-blue-500,
+:root[data-theme="light"] .suf-app .bg-blue-600,
+:root[data-theme="light"] .suf-app .bg-indigo-500,
+:root[data-theme="light"] .suf-app .bg-indigo-600,
+:root[data-theme="light"] .suf-app .bg-purple-600,
+:root[data-theme="light"] .suf-app .btn-primary,
+:root[data-theme="light"] .suf-app .page-current,
+:root[data-theme="light"] .suf-app .page-btn {
+  background: linear-gradient(135deg, #256d75, #1e5268) !important;
+  border-color: rgba(30, 82, 104, 0.22) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 22px rgba(30, 82, 104, 0.16) !important;
+}
+
+.suf-app .bg-green-500,
+.suf-app .bg-green-600,
+.suf-app .btn-success {
+  background: linear-gradient(135deg, #0f9f72, var(--green)) !important;
+  color: #fff !important;
+}
+
+:root[data-theme="light"] .suf-app .bg-green-500,
+:root[data-theme="light"] .suf-app .bg-green-600,
+:root[data-theme="light"] .suf-app .btn-success {
+  background: linear-gradient(135deg, #0b8f6a, #10b981) !important;
+  box-shadow: 0 10px 22px rgba(16, 185, 129, 0.16) !important;
+}
+
+.suf-app .bg-red-500,
+.suf-app .bg-red-600,
+.suf-app .btn-danger {
+  background: linear-gradient(135deg, #b8424e, #d0525f) !important;
+  color: #fff !important;
+}
+
+.suf-app .bg-yellow-500,
+.suf-app .bg-yellow-600,
+.suf-app .bg-orange-500,
+.suf-app .bg-orange-600 {
+  background: linear-gradient(135deg, #7a6138, #5d4a2f) !important;
+  color: #fff !important;
+}
+
+:root[data-theme="light"] .suf-app .bg-yellow-500,
+:root[data-theme="light"] .suf-app .bg-yellow-600,
+:root[data-theme="light"] .suf-app .bg-orange-500,
+:root[data-theme="light"] .suf-app .bg-orange-600 {
+  background: linear-gradient(135deg, #b87721, #8a5a1f) !important;
+  box-shadow: 0 10px 20px rgba(184, 119, 33, 0.14) !important;
+}
+
+.suf-app .bg-gray-200,
+.suf-app .bg-gray-300,
+.suf-app .suf-reset-filter,
+.suf-app button.bg-gray-300,
+.suf-app a.bg-gray-300 {
+  background: linear-gradient(135deg, #343942, #262b32) !important;
+  border-color: rgba(255, 255, 255, 0.13) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="light"] .suf-app .bg-gray-200,
+:root[data-theme="light"] .suf-app .bg-gray-300,
+:root[data-theme="light"] .suf-app .suf-reset-filter,
+:root[data-theme="light"] .suf-app button.bg-gray-300,
+:root[data-theme="light"] .suf-app a.bg-gray-300,
+:root[data-theme="light"] .suf-app .btn-outline-primary,
+:root[data-theme="light"] .suf-app .btn-outline-secondary {
+  background: linear-gradient(135deg, #e6f0ed, #d9e6e3) !important;
+  border-color: rgba(13, 84, 76, 0.18) !important;
+  color: #1d3f3e !important;
+}
+
+.suf-app .btn-outline-primary,
+.suf-app .btn-outline-secondary,
+.suf-app .btn-outline-danger,
+.suf-app a:not([class*="bg-"]).btn {
+  background: var(--field) !important;
+  border-color: var(--line-strong) !important;
+  color: var(--text) !important;
+}
+
+.suf-app #balances > div,
+.suf-app #more-balances > div {
+  min-height: 104px;
+  border: 1px solid var(--line) !important;
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
+    var(--panel) !important;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.16) !important;
+}
+
+:root[data-theme="light"] .suf-app #balances > div,
+:root[data-theme="light"] .suf-app #more-balances > div {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(242, 248, 246, 0.88)),
+    var(--panel) !important;
+  border-color: rgba(13, 84, 76, 0.12) !important;
+  box-shadow: 0 14px 34px rgba(30, 70, 66, 0.09) !important;
+}
+
+.suf-app #balances img,
+.suf-app #more-balances img {
+  width: 22px !important;
+  height: 22px !important;
+  object-fit: contain;
+  image-rendering: auto;
+  filter: drop-shadow(0 5px 12px rgba(0, 0, 0, 0.18));
+}
+
+.suf-app #balances .w-7,
+.suf-app #more-balances .w-7 {
+  width: 34px !important;
+  height: 34px !important;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+.suf-app #balances span.text-sm,
+.suf-app #more-balances span.text-sm {
+  color: var(--muted) !important;
+  font-size: 12px !important;
+  line-height: 1;
+  filter: grayscale(1);
+}
+
+.suf-app .text-gray-800,
+.suf-app .text-gray-900,
+.suf-app .text-black {
+  color: var(--text) !important;
+}
+
+.suf-app .text-green-600,
+.suf-app .text-success {
+  color: #2be0a4 !important;
+}
+
+.suf-app .text-red-600,
+.suf-app .text-danger {
+  color: #ff6975 !important;
+}
+
+.suf-app .border,
+.suf-app table,
+.suf-app th,
+.suf-app td {
+  border-color: var(--line) !important;
+}
+
+.suf-app table {
+  border-collapse: separate !important;
+  border-spacing: 0;
+  overflow: hidden;
+}
+
+.suf-app th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-strong) !important;
+  color: var(--muted) !important;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.suf-app td {
+  background: rgba(255, 255, 255, 0.015);
+  color: var(--text) !important;
+}
+
+.suf-app tbody tr {
+  transition: background 0.16s ease;
+}
+
+.suf-app tbody tr:hover,
+.suf-app .hover\:bg-gray-50:hover,
+.suf-app .hover\:bg-gray-100:hover,
+.suf-app .hover\:bg-gray-300:hover {
+  background: rgba(63, 125, 246, 0.12) !important;
+}
+
+.suf-app .bg-blue-50 {
+  background: rgba(79, 111, 151, 0.12) !important;
+}
+
+.suf-app .bg-red-100,
+.suf-app .table-danger {
+  background: rgba(238, 77, 90, 0.14) !important;
+}
+
+.suf-app .table-info {
+  background: rgba(79, 111, 151, 0.12) !important;
+}
+
+.suf-app .table-secondary {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+.suf-app .fixed.inset-0 {
+  background: rgba(0, 0, 0, 0.54) !important;
+  backdrop-filter: blur(10px);
+}
+
+.suf-app .fixed.inset-0 > div {
+  border: 1px solid var(--line-strong) !important;
+  background: var(--panel-strong) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+.suf-app #mainAssets,
+.suf-app #reserveAssets {
+  border-color: var(--line) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.suf-app #mainAssets li,
+.suf-app #reserveAssets li {
+  border: 1px solid var(--line) !important;
+  background: var(--field) !important;
+  color: var(--text) !important;
+}
+
+.suf-app .pagination,
+.suf-app .flex.gap-1 a,
+.suf-app .flex.gap-1 span {
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+
+.suf-app canvas {
+  border-radius: var(--radius);
+}
+
+@media (max-width: 900px) {
+  .suf-app header,
+  .suf-app header .flex {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  .suf-app header {
+    width: calc(100% - 20px);
+    margin: 10px;
+  }
+
+  .suf-app .container {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .suf-app table {
+    min-width: 980px;
+  }
+
+  .suf-app .bg-white:has(table) {
+    overflow-x: auto;
+  }
+}

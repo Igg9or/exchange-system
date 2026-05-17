@@ -3,10 +3,16 @@
   <head>
     <meta charset="UTF-8">
     <title>Crypto Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      (function () {
+        const savedTheme = localStorage.getItem("suf-theme") || "dark";
+        document.documentElement.dataset.theme = savedTheme;
+      })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   </head>
-  <body class="bg-gray-100 text-gray-900">
+  <body class="suf-app bg-gray-100 text-gray-900">
 
   <header class="bg-white shadow p-4 mb-4 flex justify-between items-center">
     <div>
@@ -14,6 +20,10 @@
       <span class="text-gray-500 text-sm"> ({{ user.role }})</span>
     </div>
     <div class="flex items-center gap-3">
+      <button type="button" class="theme-toggle" onclick="toggleSufTheme()" aria-label="Toggle theme">
+        <span class="theme-toggle__dot"></span>
+        <span id="themeToggleText">Theme</span>
+      </button>
 
       {% if user.role == "admin" or user.role == "operator" %}
 <div style="padding:10px; background:#eef;">
@@ -258,7 +268,7 @@
     {% endif %}
 
     <a href="{{ url_for('index', service_id=selected_service_id) }}"
-       class="bg-gray-300 text-black px-3 py-1 rounded text-sm">
+       class="suf-reset-filter bg-gray-300 text-black px-3 py-1 rounded text-sm">
       🔄 Все
     </a>
 
@@ -1009,6 +1019,24 @@ function openEditIOmodal(id, comment, amount, assetId, direction) {
   document.getElementById('editIOForm').action = "/edit_io/" + id;
   document.getElementById('editIOModal').classList.remove('hidden');
 }
+
+function setSufTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("suf-theme", theme);
+  const label = document.getElementById("themeToggleText");
+  if (label) {
+    label.textContent = theme === "dark" ? "Dark" : "Light";
+  }
+}
+
+function toggleSufTheme() {
+  const current = document.documentElement.dataset.theme || "dark";
+  setSufTheme(current === "dark" ? "light" : "dark");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setSufTheme(localStorage.getItem("suf-theme") || "dark");
+});
 
 
 </script>

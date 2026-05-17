@@ -4,8 +4,18 @@
   <meta charset="UTF-8">
   <title>Управление пользователями</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    (function () {
+      document.documentElement.dataset.theme = localStorage.getItem("suf-theme") || "dark";
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body class="bg-gray-100 text-gray-900">
+<body class="suf-app bg-gray-100 text-gray-900">
+<button type="button" class="theme-toggle theme-toggle--floating" onclick="toggleSufTheme()" aria-label="Toggle theme">
+  <span class="theme-toggle__dot"></span>
+  <span id="themeToggleText">Theme</span>
+</button>
 
 <div class="container mx-auto p-6">
   <h1 class="text-2xl font-bold mb-6">Пользователи</h1>
@@ -132,6 +142,20 @@
   function closeEditModal() {
     document.getElementById('editModal').classList.add('hidden');
   }
+
+  function setSufTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("suf-theme", theme);
+    const label = document.getElementById("themeToggleText");
+    if (label) label.textContent = theme === "dark" ? "Dark" : "Light";
+  }
+
+  function toggleSufTheme() {
+    const current = document.documentElement.dataset.theme || "dark";
+    setSufTheme(current === "dark" ? "light" : "dark");
+  }
+
+  setSufTheme(localStorage.getItem("suf-theme") || "dark");
 </script>
 
 </body>
