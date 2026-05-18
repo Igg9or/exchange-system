@@ -249,6 +249,30 @@ body.suf-app {
   color: var(--muted-2) !important;
 }
 
+.suf-app select option,
+.suf-app .form-select option {
+  background: #24272d;
+  color: #f5f5f7;
+}
+
+.suf-app select option:checked,
+.suf-app .form-select option:checked {
+  background: #2f6f61;
+  color: #ffffff;
+}
+
+:root[data-theme="light"] .suf-app select option,
+:root[data-theme="light"] .suf-app .form-select option {
+  background: #ffffff;
+  color: #16181d;
+}
+
+:root[data-theme="light"] .suf-app select option:checked,
+:root[data-theme="light"] .suf-app .form-select option:checked {
+  background: #d9eee8;
+  color: #173d3a;
+}
+
 .suf-app button,
 .suf-app a[class*="bg-"],
 .suf-app .btn {
