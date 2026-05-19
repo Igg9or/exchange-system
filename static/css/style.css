@@ -293,5 +293,5 @@ button:not([class]) {
 }
 
 .shift-summary-panel {
-  border-radius: 0 !important;
+  border-radius: 1rem !important;
 }
