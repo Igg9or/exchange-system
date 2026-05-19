@@ -685,35 +685,6 @@
     <h2 class="text-xl font-bold mb-4">Редактирование активов</h2>
     <p class="text-sm text-gray-600 mb-4">Перетащите активы между колонками, чтобы настроить «Основные» и «Резервные».</p>
 
-    <div class="asset-icon-manager mb-6">
-      <div class="flex justify-between items-center mb-3">
-        <h3 class="font-semibold">Иконки валют</h3>
-        <span class="text-xs text-gray-600">PNG, JPG, WEBP до 8 MB</span>
-      </div>
-      <div class="asset-icon-grid">
-        {% for asset in assets %}
-          <div class="asset-icon-item">
-            <div class="asset-icon-preview">
-              {% set icon_url = asset_icon_url(asset) %}
-              {% if icon_url %}
-                <img src="{{ icon_url }}" alt="{{ asset.symbol }}">
-              {% else %}
-                <span>◆</span>
-              {% endif %}
-            </div>
-            <div class="asset-icon-meta">
-              <strong>{{ NAME_MAP.get(asset.symbol, asset.symbol) }}</strong>
-              <span>{{ asset.symbol }}</span>
-            </div>
-            <form action="{{ url_for('upload_asset_icon', asset_id=asset.id) }}" method="post" enctype="multipart/form-data" class="icon-upload-form">
-              <input id="assetIconAll{{ asset.id }}" type="file" name="icon" accept="image/png,image/jpeg,image/webp" onchange="this.form.submit()">
-              <label for="assetIconAll{{ asset.id }}">Иконка</label>
-            </form>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-
     <div class="grid grid-cols-2 gap-6">
       <!-- Основные -->
       <div>
