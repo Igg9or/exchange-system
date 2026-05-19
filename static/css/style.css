@@ -236,3 +236,62 @@ body {
   font-weight: 600;
   cursor: pointer;
 }
+
+button,
+a[class*="bg-"],
+a.btn,
+.icon-upload-form label,
+.page-btn,
+.tab-btn {
+  border-radius: 0.8rem !important;
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  font-weight: 700;
+  line-height: 1.15;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease,
+    background-color 0.16s ease;
+}
+
+button:hover,
+a[class*="bg-"]:hover,
+a.btn:hover,
+.icon-upload-form label:hover,
+.page-btn:hover,
+.tab-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  filter: brightness(1.04);
+}
+
+button:active,
+a[class*="bg-"]:active,
+a.btn:active,
+.icon-upload-form label:active,
+.page-btn:active,
+.tab-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.1);
+}
+
+button.text-\[10px\],
+button.text-xs,
+a.text-xs {
+  border-radius: 0.65rem !important;
+  min-height: 1.75rem;
+}
+
+button:not([class]) {
+  padding: 0.35rem 0.8rem;
+}
+
+.shift-summary-panel {
+  border-radius: 0 !important;
+}
