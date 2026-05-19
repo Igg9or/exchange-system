@@ -363,16 +363,15 @@ def index():
 
             # Простой вариант расчета переводов:
             for t in internal_transfers:
-                given_amount = t.given_amount or 0
-                received_amount = t.received_amount or 0
-            
-                if t.given_asset_id and given_amount > 0 and t.service_id == current_shift.service_id:
+                if t.given_asset_id and t.given_amount > 0 and t.service_id == current_shift.service_id:
+                    # Этот сервис отправил средства
                     rub_rate = price_rub_for_asset_id(db, t.given_asset_id) or 0
-                    transfers_sum -= given_amount * rub_rate
-            
-                if t.received_asset_id and received_amount > 0 and t.service_id == current_shift.service_id:
+                    transfers_sum -= t.given_amount * rub_rate
+                    
+                if t.received_asset_id and t.received_amount > 0 and t.service_id == current_shift.service_id:
+                    # Этот сервис получил средства
                     rub_rate = price_rub_for_asset_id(db, t.received_asset_id) or 0
-                    transfers_sum += received_amount * rub_rate
+                    transfers_sum += t.received_amount * rub_rate
 
         if service:
             current_shift = (
@@ -1901,12 +1900,9 @@ def delete_transfer(order_id):
         to_order = None
         
         for o in transfer_orders:
-            given_amount = o.given_amount or 0
-            received_amount = o.received_amount or 0
-        
-            if o.given_asset_id and given_amount > 0:
+            if o.given_asset_id and o.given_amount > 0:  # исходящий
                 from_order = o
-            elif o.received_asset_id and received_amount > 0:
+            elif o.received_asset_id and o.received_amount > 0:  # входящий
                 to_order = o
 
         if not from_order or not to_order:
