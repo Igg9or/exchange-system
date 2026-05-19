@@ -75,8 +75,9 @@
         <!-- Иконка + Название -->
 <div class="flex items-center justify-center gap-2 mb-1">
   <div class="w-7 h-7 flex items-center justify-center bg-gray-100 rounded-full">
-    {% if ICON_MAP.get(asset.symbol) %}
-      <img src="{{ ICON_MAP[asset.symbol] }}" alt="{{ asset.symbol }}" class="w-4 h-4"
+    {% set icon_url = asset_icon_url(asset) %}
+    {% if icon_url %}
+      <img src="{{ icon_url }}" alt="{{ asset.symbol }}" class="w-4 h-4"
      onerror="this.outerHTML='<span class=\'text-sm\'>🔹</span>'">
     {% else %}
       <span class="text-sm">🔹</span>
@@ -312,10 +313,22 @@
     </td>
     <td class="p-2 border">{{ o.user.login if o.user else '-' }}</td>
     <td class="p-2 border text-green-600">
-      {{ o.received_amount|trim_float }} {{ o.received_asset.symbol if o.received_asset else '' }}
+      <span class="asset-inline">
+        {% if o.received_asset %}
+          {% set recv_icon = asset_icon_url(o.received_asset) %}
+          {% if recv_icon %}<img src="{{ recv_icon }}" alt="{{ o.received_asset.symbol }}">{% endif %}
+        {% endif %}
+        {{ o.received_amount|trim_float }} {{ o.received_asset.symbol if o.received_asset else '' }}
+      </span>
     </td>
     <td class="p-2 border text-red-600">
-      {{ o.given_amount|trim_float }} {{ o.given_asset.symbol if o.given_asset else '' }}
+      <span class="asset-inline">
+        {% if o.given_asset %}
+          {% set given_icon = asset_icon_url(o.given_asset) %}
+          {% if given_icon %}<img src="{{ given_icon }}" alt="{{ o.given_asset.symbol }}">{% endif %}
+        {% endif %}
+        {{ o.given_amount|trim_float }} {{ o.given_asset.symbol if o.given_asset else '' }}
+      </span>
     </td>
     <td class="p-2 border">{{ o.comment }}</td>
     <td class="p-2 border">{{ "%.2f"|format(o.profit_percent or 0) }} %</td>
@@ -500,14 +513,18 @@
         <!-- Получаем -->
         <div>
           <label class="block text-sm">Получаем (Актив)</label>
-          <select name="received_asset_id" class="border w-full px-2 py-1 rounded">
+          <div class="asset-select-row">
+          <span class="asset-select-preview" data-preview-for="orderReceivedAsset"></span>
+          <select name="received_asset_id" id="orderReceivedAsset" class="border w-full px-2 py-1 rounded asset-select">
   {% for asset in assets %}
     <option value="{{ asset.id }}" 
+            data-icon="{{ asset_icon_url(asset) or '' }}"
             {% if asset.symbol == "USDT" %}selected{% endif %}>
       {{ asset.symbol }}
     </option>
   {% endfor %}
 </select>
+          </div>
         </div>
         <div>
           <label class="block text-sm">Сумма получаем</label>
@@ -517,14 +534,18 @@
         <!-- Отдаём -->
         <div>
           <label class="block text-sm">Отдаём (Актив)</label>
-          <select name="given_asset_id" class="border w-full px-2 py-1 rounded">
+          <div class="asset-select-row">
+          <span class="asset-select-preview" data-preview-for="orderGivenAsset"></span>
+          <select name="given_asset_id" id="orderGivenAsset" class="border w-full px-2 py-1 rounded asset-select">
   {% for asset in assets %}
     <option value="{{ asset.id }}" 
+            data-icon="{{ asset_icon_url(asset) or '' }}"
             {% if asset.symbol == "USDT" %}selected{% endif %}>
       {{ asset.symbol }}
     </option>
   {% endfor %}
 </select>
+          </div>
         </div>
         <div>
           <label class="block text-sm">Сумма отдаём</label>
@@ -674,6 +695,35 @@
     <h2 class="text-xl font-bold mb-4">Редактирование активов</h2>
     <p class="text-sm text-gray-600 mb-4">Перетащите активы между колонками, чтобы настроить «Основные» и «Резервные».</p>
 
+    <div class="asset-icon-manager mb-6">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="font-semibold">Иконки валют</h3>
+        <span class="text-xs text-gray-600">PNG, JPG, WEBP до 8 MB</span>
+      </div>
+      <div class="asset-icon-grid">
+        {% for asset in assets %}
+          <div class="asset-icon-item">
+            <div class="asset-icon-preview">
+              {% set icon_url = asset_icon_url(asset) %}
+              {% if icon_url %}
+                <img src="{{ icon_url }}" alt="{{ asset.symbol }}">
+              {% else %}
+                <span>◆</span>
+              {% endif %}
+            </div>
+            <div class="asset-icon-meta">
+              <strong>{{ NAME_MAP.get(asset.symbol, asset.symbol) }}</strong>
+              <span>{{ asset.symbol }}</span>
+            </div>
+            <form action="{{ url_for('upload_asset_icon', asset_id=asset.id) }}" method="post" enctype="multipart/form-data" class="icon-upload-form">
+              <input id="assetIconAll{{ asset.id }}" type="file" name="icon" accept="image/png,image/jpeg,image/webp" onchange="this.form.submit()">
+              <label for="assetIconAll{{ asset.id }}">Иконка</label>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="grid grid-cols-2 gap-6">
       <!-- Основные -->
       <div>
@@ -809,11 +859,14 @@
       <!-- Получаем -->
       <div>
         <label class="block text-sm">Получаем (Актив)</label>
-        <select name="received_asset_id" id="editReceivedAsset" class="border w-full px-2 py-1 rounded">
+        <div class="asset-select-row">
+        <span class="asset-select-preview" data-preview-for="editReceivedAsset"></span>
+        <select name="received_asset_id" id="editReceivedAsset" class="border w-full px-2 py-1 rounded asset-select">
           {% for asset in assets %}
-            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            <option value="{{ asset.id }}" data-icon="{{ asset_icon_url(asset) or '' }}">{{ asset.symbol }}</option>
           {% endfor %}
         </select>
+        </div>
       </div>
       <div>
         <label class="block text-sm">Сумма получаем</label>
@@ -823,11 +876,14 @@
       <!-- Отдаём -->
       <div>
         <label class="block text-sm">Отдаём (Актив)</label>
-        <select name="given_asset_id" id="editGivenAsset" class="border w-full px-2 py-1 rounded">
+        <div class="asset-select-row">
+        <span class="asset-select-preview" data-preview-for="editGivenAsset"></span>
+        <select name="given_asset_id" id="editGivenAsset" class="border w-full px-2 py-1 rounded asset-select">
           {% for asset in assets %}
-            <option value="{{ asset.id }}">{{ asset.symbol }}</option>
+            <option value="{{ asset.id }}" data-icon="{{ asset_icon_url(asset) or '' }}">{{ asset.symbol }}</option>
           {% endfor %}
         </select>
+        </div>
       </div>
       <div>
         <label class="block text-sm">Сумма отдаём</label>
@@ -950,6 +1006,8 @@
   }
 
 document.addEventListener("DOMContentLoaded", () => {
+  initAssetSelectPreviews();
+
   const select = document.getElementById("pairSelect");
   if (!select) return;
 
@@ -985,6 +1043,8 @@ function openEditOrderModal(id, comment, receivedAmount, givenAmount, receivedAs
   // активы
   document.getElementById('editReceivedAsset').value = receivedAssetId;
   document.getElementById('editGivenAsset').value = givenAssetId;
+  updateAssetSelectPreview(document.getElementById('editReceivedAsset'));
+  updateAssetSelectPreview(document.getElementById('editGivenAsset'));
 
   // категория
   if (categoryId) {
@@ -996,6 +1056,29 @@ function openEditOrderModal(id, comment, receivedAmount, givenAmount, receivedAs
   // экшен
   document.getElementById('editOrderForm').action = "/edit_order/" + id;
   document.getElementById('editOrderModal').classList.remove('hidden');
+}
+
+function updateAssetSelectPreview(select) {
+  if (!select) return;
+  const preview = document.querySelector(`[data-preview-for="${select.id}"]`);
+  if (!preview) return;
+
+  const option = select.options[select.selectedIndex];
+  const icon = option ? option.dataset.icon : "";
+  const symbol = option ? option.textContent.trim() : "";
+
+  if (icon) {
+    preview.innerHTML = `<img src="${icon}" alt="${symbol}">`;
+  } else {
+    preview.innerHTML = "<span>◆</span>";
+  }
+}
+
+function initAssetSelectPreviews() {
+  document.querySelectorAll(".asset-select").forEach(select => {
+    updateAssetSelectPreview(select);
+    select.addEventListener("change", () => updateAssetSelectPreview(select));
+  });
 }
 
 

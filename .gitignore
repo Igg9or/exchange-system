@@ -1,0 +1,10 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.log
+exchange_db_backup.sql
+static/icons/custom/*
+exchange-system-deploy-*.zip
+.env
+.env.*
