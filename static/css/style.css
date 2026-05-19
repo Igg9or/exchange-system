@@ -504,62 +504,6 @@ body.suf-app {
   color: var(--text) !important;
 }
 
-.asset-icon-preview {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-
-.asset-icon-preview img {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-}
-
-.asset-icon-preview span {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1;
-}
-
-.icon-upload-form {
-  display: inline-flex;
-  align-items: center;
-}
-
-.icon-upload-form input[type="file"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.icon-upload-form label {
-  min-height: 28px;
-  padding: 6px 9px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text) !important;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.16s ease, transform 0.16s ease;
-}
-
-.icon-upload-form label:hover {
-  transform: translateY(-1px);
-  background: rgba(23, 184, 132, 0.14);
-}
-
 .suf-app .pagination,
 .suf-app .flex.gap-1 a,
 .suf-app .flex.gap-1 span {

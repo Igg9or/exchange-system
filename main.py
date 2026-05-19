@@ -18,8 +18,6 @@ from flask import session
 from rates import ICON_MAP, NAME_MAP, ALIAS
 from flask import abort
 import logging
-import os
-from werkzeug.utils import secure_filename
 from datetime import timezone
 from datetime import datetime, timedelta
 
@@ -32,42 +30,7 @@ MSK = timezone.utc
 app = Flask(__name__)
 logging.basicConfig(level=logging.DEBUG)
 app.secret_key = "super_secret_key_123"
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 init_db()
-
-CUSTOM_ICON_DIR = os.path.join(app.static_folder, "icons", "custom")
-ALLOWED_ICON_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-
-
-def asset_icon_url(asset):
-    if not asset:
-        return None
-
-    for ext in ALLOWED_ICON_EXTENSIONS:
-        filename = f"asset_{asset.id}.{ext}"
-        path = os.path.join(CUSTOM_ICON_DIR, filename)
-        if os.path.exists(path):
-            return url_for("static", filename=f"icons/custom/{filename}")
-
-    return ICON_MAP.get(asset.symbol)
-
-
-def has_valid_icon_signature(file_storage, ext):
-    header = file_storage.stream.read(16)
-    file_storage.stream.seek(0)
-
-    if ext == "png":
-        return header.startswith(b"\x89PNG\r\n\x1a\n")
-    if ext in {"jpg", "jpeg"}:
-        return header.startswith(b"\xff\xd8\xff")
-    if ext == "webp":
-        return header[:4] == b"RIFF" and header[8:12] == b"WEBP"
-    return False
-
-
-@app.context_processor
-def inject_asset_helpers():
-    return {"asset_icon_url": asset_icon_url}
 
 
 # ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
@@ -1667,48 +1630,8 @@ def delete_asset(asset_id):
         if asset:
             db.delete(asset)   # теперь это безопасно
             db.commit()
-            for ext in ALLOWED_ICON_EXTENSIONS:
-                icon_path = os.path.join(CUSTOM_ICON_DIR, f"asset_{asset_id}.{ext}")
-                if os.path.exists(icon_path):
-                    os.remove(icon_path)
 
     return redirect(url_for("index"))
-
-
-@app.route("/assets/<int:asset_id>/icon", methods=["POST"])
-def upload_asset_icon(asset_id):
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    icon = request.files.get("icon")
-    if not icon or not icon.filename:
-        flash("Выберите файл иконки", "error")
-        return redirect(request.referrer or url_for("index"))
-
-    filename = secure_filename(icon.filename)
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    if ext not in ALLOWED_ICON_EXTENSIONS:
-        flash("Поддерживаются только PNG, JPG, JPEG и WEBP", "error")
-        return redirect(request.referrer or url_for("index"))
-
-    if not has_valid_icon_signature(icon, ext):
-        flash("Файл не похож на корректную иконку PNG, JPG или WEBP", "error")
-        return redirect(request.referrer or url_for("index"))
-
-    with get_db() as db:
-        asset = db.get(Asset, asset_id)
-        if not asset:
-            abort(404)
-
-    os.makedirs(CUSTOM_ICON_DIR, exist_ok=True)
-    for old_ext in ALLOWED_ICON_EXTENSIONS:
-        old_path = os.path.join(CUSTOM_ICON_DIR, f"asset_{asset_id}.{old_ext}")
-        if os.path.exists(old_path):
-            os.remove(old_path)
-
-    icon.save(os.path.join(CUSTOM_ICON_DIR, f"asset_{asset_id}.{ext}"))
-    flash("Иконка актива обновлена", "success")
-    return redirect(request.referrer or url_for("index"))
 
 
 @app.after_request
